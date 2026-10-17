@@ -1,0 +1,358 @@
+/* ==========================================================================
+   TIRP Dashboard — Design System
+   A calm operations console for human conversations.
+
+   Structure
+   1. Fonts (self-hosted via Fontsource)
+   2. Tailwind + plugins
+   3. Dark mode strategy
+   4. Theme: token -> Tailwind utility mapping
+   5. Light tokens
+   6. Dark tokens
+   7. Base layer
+   8. Custom utilities
+   ========================================================================== */
+
+/* 1. Fonts ---------------------------------------------------------------- */
+@import "@fontsource-variable/ibm-plex-sans";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/ibm-plex-mono/600.css";
+
+/* 2. Tailwind + plugins --------------------------------------------------- */
+@import "tailwindcss";
+@import "tw-animate-css";
+@plugin "@tailwindcss/typography";
+
+/* 3. Dark mode strategy --------------------------------------------------- */
+/* Class-based so users can override the OS preference. `.dark` is applied to
+   <html> by the theme init script (see src/routes/__root.tsx). */
+@custom-variant dark (&:is(.dark *));
+
+/* 4. Theme: token -> Tailwind utility mapping ----------------------------- */
+@theme inline {
+  /* Typography */
+  --font-sans:
+    "IBM Plex Sans Variable", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+  --font-mono:
+    "IBM Plex Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+
+  /* Surfaces & text */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  /* Interactive */
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  /* Feedback */
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+
+  /* Soft status surfaces — paired foregrounds guarantee text contrast. */
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-soft-foreground: var(--primary-soft-foreground);
+  --color-success-soft: var(--success-soft);
+  --color-success-soft-foreground: var(--success-soft-foreground);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-soft-foreground: var(--warning-soft-foreground);
+  --color-info-soft: var(--info-soft);
+  --color-info-soft-foreground: var(--info-soft-foreground);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-destructive-soft-foreground: var(--destructive-soft-foreground);
+
+  /* Lines & focus */
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Charts */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Sidebar */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Radius scale — driven by the single --radius token */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+
+  /* Motion — expressive but restrained */
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-quint: cubic-bezier(0.83, 0, 0.17, 1);
+
+  /* Layout rhythm */
+  --spacing-sidebar: 16rem;
+  --spacing-sidebar-icon: 3rem;
+  --spacing-topbar: 3.5rem;
+}
+
+/* 5. Light tokens --------------------------------------------------------- */
+:root {
+  --radius: 0.625rem;
+
+  /* Cool, quiet canvas — reads as a work surface, not a document. */
+  --background: oklch(0.984 0.003 240);
+  --foreground: oklch(0.235 0.021 250);
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.235 0.021 250);
+
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.235 0.021 250);
+
+  /* Deep teal — trust and communication without impersonating WhatsApp. */
+  --primary: oklch(0.5 0.088 202);
+  --primary-foreground: oklch(0.99 0.005 202);
+
+  --secondary: oklch(0.962 0.006 245);
+  --secondary-foreground: oklch(0.3 0.021 250);
+
+  --muted: oklch(0.966 0.005 245);
+  --muted-foreground: oklch(0.53 0.018 250);
+
+  --accent: oklch(0.955 0.019 202);
+  --accent-foreground: oklch(0.36 0.05 202);
+
+  --destructive: oklch(0.552 0.196 27);
+  --destructive-foreground: oklch(0.99 0.005 27);
+
+  --success: oklch(0.56 0.11 155);
+  --success-foreground: oklch(0.99 0.005 155);
+
+  --warning: oklch(0.66 0.14 72);
+  --warning-foreground: oklch(0.26 0.04 72);
+
+  --info: oklch(0.56 0.11 250);
+  --info-foreground: oklch(0.99 0.005 250);
+
+  --primary-soft: oklch(0.95 0.025 202);
+  --primary-soft-foreground: oklch(0.4 0.08 202);
+  --success-soft: oklch(0.95 0.04 155);
+  --success-soft-foreground: oklch(0.4 0.09 155);
+  --warning-soft: oklch(0.96 0.045 80);
+  --warning-soft-foreground: oklch(0.44 0.09 65);
+  --info-soft: oklch(0.95 0.035 250);
+  --info-soft-foreground: oklch(0.44 0.1 258);
+  --destructive-soft: oklch(0.955 0.03 27);
+  --destructive-soft-foreground: oklch(0.48 0.17 27);
+
+  --border: oklch(0.918 0.006 245);
+  --input: oklch(0.918 0.006 245);
+  --ring: oklch(0.5 0.088 202);
+
+  --chart-1: oklch(0.52 0.09 202);
+  --chart-2: oklch(0.62 0.11 155);
+  --chart-3: oklch(0.58 0.1 262);
+  --chart-4: oklch(0.72 0.13 72);
+  --chart-5: oklch(0.6 0.12 330);
+
+  --sidebar: oklch(0.968 0.004 245);
+  --sidebar-foreground: oklch(0.28 0.02 250);
+  --sidebar-primary: oklch(0.5 0.088 202);
+  --sidebar-primary-foreground: oklch(0.99 0.005 202);
+  --sidebar-accent: oklch(0.94 0.01 245);
+  --sidebar-accent-foreground: oklch(0.28 0.02 250);
+  --sidebar-border: oklch(0.906 0.006 245);
+  --sidebar-ring: oklch(0.5 0.088 202);
+}
+
+/* 6. Dark tokens ---------------------------------------------------------- */
+.dark {
+  --background: oklch(0.185 0.014 250);
+  --foreground: oklch(0.95 0.005 240);
+
+  --card: oklch(0.219 0.016 250);
+  --card-foreground: oklch(0.95 0.005 240);
+
+  --popover: oklch(0.219 0.016 250);
+  --popover-foreground: oklch(0.95 0.005 240);
+
+  --primary: oklch(0.72 0.1 198);
+  --primary-foreground: oklch(0.17 0.02 250);
+
+  --secondary: oklch(0.27 0.017 250);
+  --secondary-foreground: oklch(0.94 0.005 240);
+
+  --muted: oklch(0.27 0.017 250);
+  --muted-foreground: oklch(0.69 0.015 245);
+
+  --accent: oklch(0.31 0.03 202);
+  --accent-foreground: oklch(0.92 0.02 202);
+
+  --destructive: oklch(0.63 0.19 25);
+  --destructive-foreground: oklch(0.98 0.008 25);
+
+  --success: oklch(0.68 0.12 155);
+  --success-foreground: oklch(0.16 0.02 155);
+
+  --warning: oklch(0.75 0.14 72);
+  --warning-foreground: oklch(0.2 0.03 72);
+
+  --info: oklch(0.68 0.11 250);
+  --info-foreground: oklch(0.16 0.02 250);
+
+  --primary-soft: oklch(0.3 0.04 202);
+  --primary-soft-foreground: oklch(0.85 0.08 200);
+  --success-soft: oklch(0.3 0.05 155);
+  --success-soft-foreground: oklch(0.85 0.1 155);
+  --warning-soft: oklch(0.32 0.06 72);
+  --warning-soft-foreground: oklch(0.86 0.11 78);
+  --info-soft: oklch(0.31 0.05 250);
+  --info-soft-foreground: oklch(0.85 0.09 250);
+  --destructive-soft: oklch(0.32 0.07 25);
+  --destructive-soft-foreground: oklch(0.85 0.12 25);
+
+  --border: oklch(1 0 0 / 11%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.72 0.1 198);
+
+  --chart-1: oklch(0.7 0.1 198);
+  --chart-2: oklch(0.72 0.11 155);
+  --chart-3: oklch(0.7 0.1 262);
+  --chart-4: oklch(0.78 0.13 72);
+  --chart-5: oklch(0.72 0.12 330);
+
+  --sidebar: oklch(0.205 0.015 250);
+  --sidebar-foreground: oklch(0.92 0.005 240);
+  --sidebar-primary: oklch(0.72 0.1 198);
+  --sidebar-primary-foreground: oklch(0.17 0.02 250);
+  --sidebar-accent: oklch(0.27 0.018 250);
+  --sidebar-accent-foreground: oklch(0.94 0.005 240);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.72 0.1 198);
+}
+
+/* 7. Base layer ----------------------------------------------------------- */
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Numeric data aligns in columns by default. */
+  :where(table, .tabular) {
+    font-variant-numeric: tabular-nums;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--primary) 26%, transparent);
+  }
+
+  /* Consistent, visible focus for keyboard users only. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Respect reduced-motion at the source. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* 8. Custom utilities ----------------------------------------------------- */
+
+/* Thin, unobtrusive scrollbars that match the surface. */
+@utility scrollbar-slim {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent)
+    transparent;
+
+  &::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklab, var(--foreground) 22%, transparent);
+    border-radius: 9999px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+/* Visually hide content while keeping it available to assistive tech. */
+@utility sr-only-focusable {
+  &:not(:focus):not(:focus-within) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+}
+
+/* Entrance used once per view — never on every element. */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@utility animate-rise-in {
+  animation: rise-in 480ms var(--ease-out-quint) both;
+}
