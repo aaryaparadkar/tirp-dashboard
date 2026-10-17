@@ -31,10 +31,10 @@ Run with Bun, not npm or node.
 - `src/components/ui/` — shadcn primitives; keep close to upstream
 - `src/components/app/` — product primitives (AppShell, PageHeader, StatCard, …)
 - `src/components/overview/`, `conversations/`, `triggers/` — page sections
-- `src/lib/api/` — typed data layer (adapter, fixtures, Phase 3 contract)
+- `src/lib/api/` — typed data layer (mock + HTTP adapter, fixtures, contract)
 - `src/components/design-system/` — the showcase rendered at `/design-system`
 - `src/lib/` — `utils.ts` (cn), `theme.ts`, `format.ts`, `navigation.ts`
-- `src/hooks/` — `use-theme`, `use-mobile`
+- `src/hooks/` — `use-theme`, `use-mobile`, `use-session`
 - `src/styles.css` — design tokens; the only global stylesheet
 
 ## Rules
@@ -66,8 +66,10 @@ Run with Bun, not npm or node.
 ## Backend
 
 `tirp-server` (sibling directory) owns WhatsApp data and exposes it over HTTP.
-Phase 3 adds authenticated conversation APIs; the dashboard reads them through
-typed client functions in `src/lib`.
+The dashboard reads it through typed client functions in `src/lib/api`. The
+HTTP adapter is opt-in: set `VITE_DASHBOARD_ADAPTER=http` (and optionally
+`VITE_DASHBOARD_API_BASE`); otherwise the console runs on deterministic
+fixtures. See `src/lib/api/README.md` for the endpoint contract and auth.
 
 ## Status
 
@@ -75,9 +77,10 @@ typed client functions in `src/lib`.
 - Phase 2 — Overview, conversation list + detail (`?c=` deep links, search,
   filters, load-more pagination), reply composer with honest failure states,
   trigger cards grouped by availability, run dialog with E.164 validation,
-  execution history: done. Reads run on the mock adapter (`src/lib/api`,
-  deterministic fixtures); sends, status/category/escalation changes, and
-  trigger runs report the structured Phase 3 error instead of simulating
-  success. Phones masked; no conversation content persisted.
-- Phase 3 — server integration: swap the HTTP adapter in via
-  `setDashboardAdapter()`, add pagination/live updates.
+  execution history: done.
+- Phase 3 — server integration: implemented. `src/lib/api/http.ts` +
+  `http-adapter.ts` talk to the authenticated `/dashboard/*` API (cookie
+  session + CSRF), selected with `VITE_DASHBOARD_ADAPTER=http`. `AuthGate`
+  handles signed-in/out/loading states; mutations refetch the affected
+  conversation; phones arrive masked; responses drive `generatedAt`; the
+  fixture disclosure disappears once the HTTP adapter is active.

@@ -35,6 +35,7 @@ import {
   requestEscalation,
   requestStatusChange,
 } from "@/lib/api/dashboard"
+import { isMockAdapter } from "@/lib/api/client"
 import {
   CONVERSATION_STATUSES,
   INTENTS,
@@ -48,15 +49,19 @@ import {
 /**
  * Header actions for the selected conversation. Read-only bookkeeping (the
  * unread badge) applies locally and says so; anything that must reach
- * tirp-server opens a confirmation dialog and reports the structured
- * Phase 3 error when confirmed — it never pretends the change happened.
+ * tirp-server opens a confirmation dialog and writes through the active
+ * adapter. On fixtures the request rejects with the structured
+ * "unsupported" error — it never pretends the change happened.
  */
 export function ConversationActions({
   conversation,
   onToggleUnread,
+  onUpdated,
 }: {
   conversation: ConversationSummary
   onToggleUnread: (unread: boolean) => void
+  /** Called with the refreshed summary after a successful mutation. */
+  onUpdated: (summary: ConversationSummary) => void
 }) {
   const [dialog, setDialog] = useState<
     null | "status" | "escalate" | "category"
@@ -120,18 +125,21 @@ export function ConversationActions({
           <StatusDialog
             conversation={conversation}
             onClose={() => setDialog(null)}
+            onUpdated={onUpdated}
           />
         ) : null}
         {dialog === "escalate" ? (
           <EscalateDialog
             conversation={conversation}
             onClose={() => setDialog(null)}
+            onUpdated={onUpdated}
           />
         ) : null}
         {dialog === "category" ? (
           <CategoryDialog
             conversation={conversation}
             onClose={() => setDialog(null)}
+            onUpdated={onUpdated}
           />
         ) : null}
       </Dialog>
@@ -165,8 +173,6 @@ function ActionDialogShell({
     setError(null)
     try {
       await onConfirm()
-      // Never reached today: every request deliberately rejects until the
-      // Phase 3 endpoints exist.
       onClose()
     } catch (thrown) {
       setError(
@@ -227,18 +233,31 @@ function ActionDialogShell({
 function StatusDialog({
   conversation,
   onClose,
+  onUpdated,
 }: {
   conversation: ConversationSummary
   onClose: () => void
+  onUpdated: (summary: ConversationSummary) => void
 }) {
   const [status, setStatus] = useState<ConversationStatus>(conversation.status)
+  const mock = isMockAdapter()
   return (
     <ActionDialogShell
       title="Change conversation status"
-      description={`Applies to the chat with ${conversation.contact.displayName}. This writes through to tirp-server; until the Phase 3 endpoint exists the console refuses to fake it.`}
+      description={
+        mock
+          ? `Applies to the chat with ${conversation.contact.displayName}. The console is running on fixtures, so this is refused until it is connected to tirp-server.`
+          : `Applies to the chat with ${conversation.contact.displayName}. The change is written through to tirp-server.`
+      }
       confirmLabel="Apply status"
       onClose={onClose}
-      onConfirm={() => requestStatusChange(conversation.id, status)}
+      onConfirm={async () => {
+        const updated = await requestStatusChange(conversation.id, status)
+        onUpdated(updated)
+        toast.success("Status updated", {
+          description: `Now ${STATUS_LABEL[updated.status]}.`,
+        })
+      }}
     >
       <div className="flex flex-col gap-2">
         <Label htmlFor="status-pick">New status</Label>
@@ -265,19 +284,39 @@ function StatusDialog({
 function EscalateDialog({
   conversation,
   onClose,
+  onUpdated,
 }: {
   conversation: ConversationSummary
   onClose: () => void
+  onUpdated: (summary: ConversationSummary) => void
 }) {
   const [note, setNote] = useState("")
+  const mock = isMockAdapter()
   return (
     <ActionDialogShell
       title="Escalate to human"
-      description={`Hands the chat with ${conversation.contact.displayName} to the support desk and pauses assistant replies. The desk must be notified through tirp-server.`}
+      description={
+        mock
+          ? `Hands the chat with ${conversation.contact.displayName} to the support desk and pauses assistant replies. The console is running on fixtures, so nobody is notified.`
+          : `Hands the chat with ${conversation.contact.displayName} to the support desk and pauses assistant replies. The desk is notified through tirp-server.`
+      }
       confirmLabel="Escalate"
       destructiveConfirm
       onClose={onClose}
-      onConfirm={() => requestEscalation(conversation.id, note)}
+      onConfirm={async () => {
+        const result = await requestEscalation(conversation.id, note)
+        onUpdated(result.summary)
+        if (result.partialError) {
+          toast.warning("Escalated with a caveat", {
+            description: result.partialError,
+          })
+        } else if (result.notified) {
+          toast.success("Escalated to the support desk", {
+            description:
+              "Assistant replies are paused until the desk resolves the chat.",
+          })
+        }
+      }}
     >
       <div className="flex flex-col gap-2">
         <Label htmlFor="escalate-note">Note for the desk (optional)</Label>
@@ -296,18 +335,31 @@ function EscalateDialog({
 function CategoryDialog({
   conversation,
   onClose,
+  onUpdated,
 }: {
   conversation: ConversationSummary
   onClose: () => void
+  onUpdated: (summary: ConversationSummary) => void
 }) {
   const [intent, setIntent] = useState<Intent>(conversation.intent)
+  const mock = isMockAdapter()
   return (
     <ActionDialogShell
       title="Change enquiry category"
-      description={`Reclassifies the chat with ${conversation.contact.displayName} so metrics follow the new group. The change is written through tirp-server.`}
+      description={
+        mock
+          ? `Reclassifies the chat with ${conversation.contact.displayName} so metrics follow the new group. The console is running on fixtures, so the value is unchanged.`
+          : `Reclassifies the chat with ${conversation.contact.displayName} so metrics follow the new group. The change is written through to tirp-server.`
+      }
       confirmLabel="Apply category"
       onClose={onClose}
-      onConfirm={() => requestCategoryChange(conversation.id, intent)}
+      onConfirm={async () => {
+        const updated = await requestCategoryChange(conversation.id, intent)
+        onUpdated(updated)
+        toast.success("Category updated", {
+          description: `Now ${INTENT_LABEL[updated.intent]}.`,
+        })
+      }}
     >
       <div className="flex flex-col gap-2">
         <Label htmlFor="category-pick">New enquiry type</Label>

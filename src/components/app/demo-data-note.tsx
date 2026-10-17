@@ -1,23 +1,28 @@
 import { DatabaseZapIcon } from "lucide-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { isMockAdapter } from "@/lib/api/client"
 import { formatDateTime } from "@/lib/format"
 
 /**
- * Honest disclosure that every data view in the console currently reads the
- * deterministic fixture adapter (`src/lib/api/dashboard.ts`). Reads show
- * real-shaped demo data; every state-changing action reports the Phase 3
- * "unsupported" error instead of faking success.
+ * Honest disclosure that the console is reading the deterministic fixture
+ * adapter rather than `tirp-server`. Rendered only in mock mode; once the HTTP
+ * adapter is active the note disappears so the console never claims demo data
+ * when it is talking to the real backend.
  */
 export function DemoDataNote({ generatedAt }: { generatedAt: string | null }) {
+  if (!isMockAdapter()) return null
+
   return (
     <Alert>
       <DatabaseZapIcon aria-hidden="true" />
-      <AlertTitle>Demo data — not connected to tirp-server yet</AlertTitle>
+      <AlertTitle>Demo data — not connected to tirp-server</AlertTitle>
       <AlertDescription>
         Every view reads deterministic fixtures so the console can be reviewed
-        before the API lands. Nothing can send a message or change a live
-        conversation; actions report the exact endpoint they are waiting for.
+        offline. Nothing here can send a message or change a live conversation;
+        actions report the exact endpoint they are waiting for. Set
+        <span className="font-mono text-xs"> VITE_DASHBOARD_ADAPTER=http </span>
+        to connect the real API.
         {generatedAt ? (
           <span className="font-mono text-xs">
             {" "}

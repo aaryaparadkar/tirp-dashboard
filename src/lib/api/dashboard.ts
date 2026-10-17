@@ -1,16 +1,19 @@
 /**
- * In-browser dashboard adapter.
+ * Dashboard adapter.
  *
- * Reads are served from deterministic fixtures (see `mock-data.ts`) so every
- * view can be designed and reviewed before Phase 3. Writes mirror reality:
- * `tirp-server` has no dashboard endpoints yet, so every mutating call
- * returns a structured "unsupported" error. The UI must present that error
- * verbatim — it must never render a simulated success for send, status, or
- * trigger actions. See `src/lib/api/README.md` for the Phase 3 HTTP contract
- * these calls are written against.
+ * The console reads and writes through a single `DashboardAdapter`. Two
+ * implementations exist:
+ *
+ * - `mockAdapter` (this file): deterministic fixtures, used for design work
+ *   and offline development. Mutations return the structured `unsupported`
+ *   error — the console never fakes a send, a status change, or a trigger run.
+ * - the HTTP adapter (`src/lib/api/http-adapter.ts`): talks to `tirp-server`'s
+ *   `/dashboard/*` endpoints with a cookie session and CSRF token.
+ *
+ * `src/lib/api/client.ts` selects one at startup. Swapping adapters does not
+ * change routes or components.
  */
 
-import { maskPhone } from "../format"
 import {
   CONVERSATIONS,
   EXECUTIONS,
@@ -33,6 +36,7 @@ import {
   type ConversationFilters,
   type ConversationStatus,
   type ConversationSummary,
+  type EscalationResult,
   type HandlingMode,
   type Intent,
   type Message,
@@ -69,10 +73,22 @@ export class DashboardApiError extends Error implements ApiError {
   }
 }
 
+/** Operator-safe titles for each backend error code. */
+export const ERROR_TITLES: Record<ApiErrorCode, string> = {
+  unauthorized: "Sign in required",
+  forbidden: "Not permitted",
+  rate_limited: "Too many requests",
+  not_found: "Not found",
+  validation: "Check the request",
+  conflict: "That change is not allowed",
+  unavailable: "The backend is unavailable",
+  unsupported: "Not supported yet",
+  network: "Could not reach the backend",
+}
+
 /**
- * Rejection used for every state-changing operation until Phase 3 ships the
- * endpoints. Built per call so no shared mutable error instance leaks
- * between components.
+ * Rejection used by the fixture adapter for every state-changing operation.
+ * Built per call so no shared mutable error instance leaks between components.
  */
 function unsupported(
   kind: "send" | "status" | "escalate" | "category" | "trigger",
@@ -81,27 +97,27 @@ function unsupported(
     send: {
       title: "Outbound messaging is not connected yet",
       message:
-        "Sending a reply from the console needs an operator endpoint in tirp-server (POST /dashboard/conversations/:id/reply). It is part of the Phase 3 API work, so nothing left the dashboard. Your draft is preserved here.",
+        "Sending a reply from the console needs an operator endpoint in tirp-server (POST /dashboard/conversations/:id/reply). The console is running on fixtures, so nothing left the browser. Your draft is preserved here.",
     },
     status: {
       title: "Status changes need the backend",
       message:
-        "Applying a conversation status needs PATCH /dashboard/conversations/:id in tirp-server. Until Phase 3 the console makes no change at all — the status still reads as the assistant left it, on WhatsApp and in the database.",
+        "Applying a conversation status needs PATCH /dashboard/conversations/:id in tirp-server. The console is running on fixtures, so no change was made.",
     },
     escalate: {
       title: "Escalation is not connected yet",
       message:
-        "Handing a conversation to the support desk needs POST /dashboard/conversations/:id/escalate. Phase 3 wires it through the existing Kapso send primitives.",
+        "Handing a conversation to the support desk needs POST /dashboard/conversations/:id/escalate. The console is running on fixtures, so nobody was notified.",
     },
     category: {
       title: "Category changes are not connected yet",
       message:
-        "Reclassifying a conversation needs PATCH /dashboard/conversations/:id/intent in tirp-server. Until then the value stays as the assistant classified it.",
+        "Reclassifying a conversation needs PATCH /dashboard/conversations/:id/intent in tirp-server. The console is running on fixtures, so the value is unchanged.",
     },
     trigger: {
       title: "Trigger runs are not connected yet",
       message:
-        "Running a WhatsApp flow from the console needs an authenticated dashboard proxy in tirp-server (the browser must never hold KAPSO or trigger tokens). Phase 3 wires it; for now no message was sent to anyone.",
+        "Running a WhatsApp flow from the console needs the authenticated dashboard API. The console is running on fixtures, so no message was sent to anyone.",
     },
   }
   return new DashboardApiError({
@@ -148,7 +164,7 @@ function matchesFilters(
   if (query) {
     const haystack = [
       summary.contact.displayName,
-      maskPhone(summary.contact.phone),
+      summary.contact.maskedPhone,
       summary.lastMessagePreview,
       INTENT_LABEL[summary.intent],
       STATUS_LABEL[summary.status],
@@ -176,23 +192,31 @@ export const CONVERSATION_PAGE_SIZE = 10
 
 /* --------------------------------------------------------------- adapter */
 
+export interface TriggerRunValues {
+  phone?: string
+  message?: string
+  conversationId?: string
+  idempotencyKey?: string
+}
+
 export interface DashboardAdapter {
-  /** "mock" while the dashboard runs on fixtures; "http" after Phase 3. */
+  /** "mock" while the dashboard runs on fixtures; "http" once connected. */
   readonly name: "mock" | "http"
-  getOverview(range: RangeId): Promise<OverviewSnapshot>
+  getOverview(range: RangeId, signal?: AbortSignal): Promise<OverviewSnapshot>
   listConversations(
     filters: ConversationFilters,
     page: Pick<Page<ConversationSummary>, "page" | "pageSize">,
+    signal?: AbortSignal,
   ): Promise<Page<ConversationSummary>>
-  getConversation(id: string): Promise<ConversationDetail>
+  getConversation(id: string, signal?: AbortSignal): Promise<ConversationDetail>
   /**
-   * Operator reply. The mock returns the composed message with a `failed`
-   * delivery state plus the structured "unsupported" error; the detail view
-   * shows it and offers retry. No message leaves the console.
+   * Operator reply. The response carries the stored message. When delivery
+   * failed the message has a `failed` delivery state and `error` is set, so
+   * the detail view can offer retry without pretending the send succeeded.
    */
   sendMessage(
     draft: MessageDraft,
-  ): Promise<{ message: Message; error: ClientError }>
+  ): Promise<{ message: Message; error?: ClientError }>
   /** Local-only bookkeeping: clear or set the unread badge. */
   markRead(conversationId: string, unread: boolean): Promise<{ ok: true }>
   /** Local-only bookkeeping for handling mode notes. */
@@ -200,8 +224,24 @@ export interface DashboardAdapter {
     conversationId: string,
     handling: HandlingMode,
   ): Promise<{ ok: true }>
-  listTriggerDefinitions(): Promise<TriggerDefinition[]>
-  listTriggerExecutions(): Promise<TriggerExecution[]>
+  requestStatusChange(
+    conversationId: string,
+    next: ConversationStatus,
+  ): Promise<ConversationSummary>
+  requestEscalation(
+    conversationId: string,
+    note: string,
+  ): Promise<EscalationResult>
+  requestCategoryChange(
+    conversationId: string,
+    next: Intent,
+  ): Promise<ConversationSummary>
+  listTriggerDefinitions(signal?: AbortSignal): Promise<TriggerDefinition[]>
+  listTriggerExecutions(signal?: AbortSignal): Promise<TriggerExecution[]>
+  runTrigger(
+    triggerId: string,
+    values: TriggerRunValues,
+  ): Promise<TriggerExecution>
 }
 
 const CONVERSATION_INDEX = new Map(CONVERSATIONS.map((item) => [item.id, item]))
@@ -260,6 +300,7 @@ export const mockAdapter: DashboardAdapter = {
       pageSize: page.pageSize,
       total: sorted.length,
       totalPages: Math.max(1, Math.ceil(sorted.length / page.pageSize)),
+      generatedAt: MOCK_NOW,
     }
   },
 
@@ -289,7 +330,8 @@ export const mockAdapter: DashboardAdapter = {
       body: draft.body,
       createdAt: MOCK_NOW,
       delivery: "failed",
-      failureNote: "Outbound send endpoint is not configured yet (Phase 3).",
+      failureNote:
+        "The console is running on fixtures; no endpoint was called.",
     }
     return { message, error: unsupported("send") }
   },
@@ -304,6 +346,21 @@ export const mockAdapter: DashboardAdapter = {
     return { ok: true }
   },
 
+  async requestStatusChange() {
+    await delay(320)
+    throw unsupported("status")
+  },
+
+  async requestEscalation() {
+    await delay(420)
+    throw unsupported("escalate")
+  },
+
+  async requestCategoryChange() {
+    await delay(320)
+    throw unsupported("category")
+  },
+
   async listTriggerDefinitions() {
     await delay(200)
     return [...TRIGGERS]
@@ -313,11 +370,25 @@ export const mockAdapter: DashboardAdapter = {
     await delay(220)
     return [...EXECUTIONS]
   },
+
+  async runTrigger(triggerId) {
+    await delay(480)
+    const trigger = TRIGGERS.find((item) => item.id === triggerId)
+    const base = unsupported("trigger")
+    throw new DashboardApiError({
+      code: base.code,
+      title: base.title,
+      message: trigger
+        ? `“${trigger.name}” would message a real contact, so the fixture console refuses to fake it. ${base.message}`
+        : base.message,
+      docs: base.docs,
+    })
+  },
 }
 
 let activeAdapter: DashboardAdapter = mockAdapter
 
-/** Swap point for Phase 3: `setDashboardAdapter(createHttpAdapter(...))`. */
+/** Swap point: `setDashboardAdapter(createHttpAdapter(...))`. */
 export function setDashboardAdapter(adapter: DashboardAdapter): void {
   activeAdapter = adapter
 }
@@ -326,71 +397,43 @@ export function getDashboardAdapter(): DashboardAdapter {
   return activeAdapter
 }
 
-/* ---------------------------------------------------- pending mutations */
+/** True while the console runs on deterministic fixtures. */
+export function isMockAdapter(): boolean {
+  return activeAdapter.name === "mock"
+}
+
+/* ---------------------------------------------------- operator mutations */
 
 /**
- * Structured rejections for operator actions that need Phase 3 endpoints.
- * Each helper awaits a beat so pending/sending states are observable, then
- * throws exactly the error the UI renders. No side effects, no simulated
- * success.
+ * These helpers delegate to the active adapter so components never choose an
+ * implementation. On fixtures they throw the structured `unsupported` error;
+ * against the HTTP adapter they perform the real mutation and return the
+ * updated summary.
  */
-export async function requestStatusChange(
+export function requestStatusChange(
   conversationId: string,
   next: ConversationStatus,
-): Promise<never> {
-  void conversationId
-  void next
-  await delay(320)
-  throw unsupported("status")
+): Promise<ConversationSummary> {
+  return activeAdapter.requestStatusChange(conversationId, next)
 }
 
-export async function requestEscalation(
+export function requestEscalation(
   conversationId: string,
   note: string,
-): Promise<never> {
-  void conversationId
-  void note
-  await delay(420)
-  throw unsupported("escalate")
+): Promise<EscalationResult> {
+  return activeAdapter.requestEscalation(conversationId, note)
 }
 
-export async function requestCategoryChange(
+export function requestCategoryChange(
   conversationId: string,
   next: Intent,
-): Promise<never> {
-  void conversationId
-  void next
-  await delay(320)
-  throw unsupported("category")
+): Promise<ConversationSummary> {
+  return activeAdapter.requestCategoryChange(conversationId, next)
 }
 
-/* ------------------------------------------------------------ triggers */
-
-export interface TriggerRunValues {
-  phone?: string
-  message?: string
-  conversationId?: string
-}
-
-/**
- * Runs a trigger through the adapter. Today this always rejects with the
- * structured "unsupported" error — the run dialog must show it verbatim and
- * must not fake success. Phase 3 will call POST /dashboard/triggers/:id/run.
- */
-export async function runTrigger(
+export function runTrigger(
   triggerId: string,
   values: TriggerRunValues,
-): Promise<never> {
-  await delay(480)
-  const trigger = TRIGGERS.find((item) => item.id === triggerId)
-  void values
-  const base = unsupported("trigger")
-  throw new DashboardApiError({
-    code: base.code,
-    title: base.title,
-    message: trigger
-      ? `“${trigger.name}” would message a real contact, so the console refuses to fake it. ${base.message}`
-      : base.message,
-    docs: base.docs,
-  })
+): Promise<TriggerExecution> {
+  return activeAdapter.runTrigger(triggerId, values)
 }

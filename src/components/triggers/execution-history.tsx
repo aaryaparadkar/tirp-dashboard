@@ -21,12 +21,14 @@ import type { TriggerExecution } from "@/lib/api/types"
 import { formatDateTime, formatDuration } from "@/lib/format"
 
 const STATUS_TONE: Record<TriggerExecution["status"], StatusTone> = {
+  running: "info",
   success: "success",
   failed: "danger",
   rejected: "warning",
 }
 
 const STATUS_PRESENT: Record<TriggerExecution["status"], string> = {
+  running: "Running",
   success: "Succeeded",
   failed: "Failed",
   rejected: "Refused",

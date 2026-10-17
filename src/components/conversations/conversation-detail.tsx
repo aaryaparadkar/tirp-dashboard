@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useDashboardQuery } from "@/hooks/use-dashboard-query"
 import { getDashboardAdapter } from "@/lib/api/dashboard"
+import { isMockAdapter } from "@/lib/api/client"
 import {
   HANDLING_LABEL,
   INTENT_LABEL,
@@ -26,7 +27,7 @@ import {
   type ConversationSummary,
   type Message,
 } from "@/lib/api/types"
-import { formatDateTime, maskPhone, relativeAgo } from "@/lib/format"
+import { formatDateTime, relativeAgo } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 /**
@@ -37,7 +38,6 @@ import { cn } from "@/lib/utils"
 export function ConversationDetail({
   conversationId,
   onPatchSummary,
-  generatedAt,
 }: {
   /** Snapshot row id; the detail query loads the thread. */
   conversationId: string
@@ -45,13 +45,11 @@ export function ConversationDetail({
     conversationId: string,
     patch: Partial<ConversationSummary>,
   ) => void
-  generatedAt: string
 }) {
   return (
     <DetailLoader
       conversationId={conversationId}
       onPatchSummary={onPatchSummary}
-      generatedAt={generatedAt}
     />
   )
 }
@@ -59,14 +57,12 @@ export function ConversationDetail({
 function DetailLoader({
   conversationId,
   onPatchSummary,
-  generatedAt,
 }: {
   conversationId: string
   onPatchSummary: (
     conversationId: string,
     patch: Partial<ConversationSummary>,
   ) => void
-  generatedAt: string
 }) {
   const query = useDashboardQuery<ConversationDetail>(
     () => getDashboardAdapter().getConversation(conversationId),
@@ -112,7 +108,8 @@ function DetailLoader({
       key={conversationId}
       detail={query.data}
       onPatchSummary={onPatchSummary}
-      generatedAt={generatedAt}
+      onRefetch={query.refetch}
+      generatedAt={query.data.summary.generatedAt}
     />
   )
 }
@@ -120,6 +117,7 @@ function DetailLoader({
 function ConversationDetailBody({
   detail,
   onPatchSummary,
+  onRefetch,
   generatedAt,
   className,
 }: {
@@ -128,6 +126,7 @@ function ConversationDetailBody({
     conversationId: string,
     patch: Partial<ConversationSummary>,
   ) => void
+  onRefetch: () => void
   generatedAt: string
   className?: string
 }) {
@@ -188,11 +187,16 @@ function ConversationDetailBody({
         )
         if (error) {
           setAnnouncement(
-            `Send failed: ${error.title}. Nothing left the console.`,
+            isMockAdapter()
+              ? `Send failed: ${error.title}. Nothing left the console.`
+              : `Send failed: ${error.title}.`,
           )
           toast.error(error.title, { description: error.message })
         } else {
           setAnnouncement("Reply sent.")
+          toast.success("Reply sent", {
+            description: "Delivered to the contact through WhatsApp.",
+          })
         }
       } finally {
         busyRef.current = false
@@ -215,12 +219,21 @@ function ConversationDetailBody({
     [onPatchSummary, summary.id],
   )
 
+  const handleUpdated = useCallback(
+    (updated: ConversationSummary) => {
+      onPatchSummary(updated.id, updated)
+      onRefetch()
+    },
+    [onPatchSummary, onRefetch],
+  )
+
   return (
     <div className={cn("flex min-h-0 flex-col gap-4", className)}>
       <DetailHeader
         summary={summary}
         generatedAt={generatedAt}
         onToggleUnread={handleToggleUnread}
+        onUpdated={handleUpdated}
       />
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
@@ -272,10 +285,12 @@ function DetailHeader({
   summary,
   generatedAt,
   onToggleUnread,
+  onUpdated,
 }: {
   summary: ConversationSummary
   generatedAt: string
   onToggleUnread: (unread: boolean) => void
+  onUpdated: (summary: ConversationSummary) => void
 }) {
   return (
     <Card size="sm">
@@ -300,7 +315,7 @@ function DetailHeader({
               {summary.contact.displayName}
             </h2>
             <p className="text-muted-foreground font-mono text-xs">
-              {maskPhone(summary.contact.phone)}
+              {summary.contact.maskedPhone}
             </p>
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               <StatusBadge tone={STATUS_TONE[summary.status]}>
@@ -322,6 +337,7 @@ function DetailHeader({
         <ConversationActions
           conversation={summary}
           onToggleUnread={onToggleUnread}
+          onUpdated={onUpdated}
         />
       </CardContent>
     </Card>

@@ -12,7 +12,7 @@ import {
   STATUS_TONE,
   type ConversationSummary,
 } from "@/lib/api/types"
-import { maskPhone, relativeAgo, truncate } from "@/lib/format"
+import { relativeAgo, truncate } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 /**
@@ -151,7 +151,7 @@ function ConversationRow({
               ) : null}
             </span>
             <span className="text-muted-foreground truncate font-mono text-xs">
-              {maskPhone(conversation.contact.phone)}
+              {conversation.contact.maskedPhone}
             </span>
           </span>
         </span>

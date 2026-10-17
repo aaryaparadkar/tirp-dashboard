@@ -25,6 +25,7 @@ import {
   type TriggerDefinition,
   type TriggerExecution,
 } from "./types"
+import { maskPhone } from "../format"
 
 /** Fixed "dataset captured at" instant. All relative labels derive from it. */
 export const MOCK_NOW = "2026-10-17T16:00:00Z"
@@ -570,7 +571,7 @@ export const CONVERSATIONS: ConversationSummary[] = CONVERSATION_SEEDS.map(
       id: seed.id,
       contact: {
         id: persona.contactId,
-        phone: persona.phone,
+        maskedPhone: maskPhone(persona.phone),
         displayName: persona.name,
         initials: persona.initials,
         language: persona.language,

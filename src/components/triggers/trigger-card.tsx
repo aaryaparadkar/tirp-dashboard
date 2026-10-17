@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { DashboardApiError, runTrigger } from "@/lib/api/dashboard"
+import { isMockAdapter } from "@/lib/api/client"
 import {
   TRIGGER_AVAILABILITY_LABEL,
   type ConversationSummary,
@@ -38,7 +39,7 @@ import {
   type TriggerExecution,
   type TriggerFieldKind,
 } from "@/lib/api/types"
-import { formatDateTime, looksLikeE164, maskPhone } from "@/lib/format"
+import { formatDateTime, looksLikeE164 } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 const AVAILABILITY_TONE: Record<TriggerDefinition["availability"], StatusTone> =
@@ -159,6 +160,8 @@ export function TriggerRunDialog({
 
   if (!trigger || !open) return null
 
+  const mock = isMockAdapter()
+
   async function confirmRun() {
     if (!trigger) return
     const problems: string[] = []
@@ -186,7 +189,7 @@ export function TriggerRunDialog({
         conversationId: values.conversation ?? "",
       })
       setResult(execution)
-      toast.success("Run recorded", {
+      toast.success(mock ? "Run recorded" : "Trigger completed", {
         description: execution.result?.reference ?? "The trigger executed.",
       })
     } catch (thrown) {
@@ -206,7 +209,9 @@ export function TriggerRunDialog({
         description:
           thrown instanceof Error
             ? thrown.message
-            : "The run was refused — nothing was sent.",
+            : mock
+              ? "The run was refused — nothing was sent."
+              : "The run did not complete.",
       })
     } finally {
       setPending(false)
@@ -233,9 +238,9 @@ export function TriggerRunDialog({
         <DialogHeader>
           <DialogTitle>Run “{trigger.name}”</DialogTitle>
           <DialogDescription>
-            This trigger messages a real WhatsApp contact. It explains exactly
-            what it will do, collects its inputs first, and runs only after your
-            confirmation.
+            {mock
+              ? "The console is running on fixtures, so this run is refused before it can message anyone. Its inputs and validation are still exercised end to end."
+              : "This trigger messages a real WhatsApp contact. It explains exactly what it will do, collects its inputs first, and runs only after your confirmation."}
           </DialogDescription>
         </DialogHeader>
 
@@ -278,10 +283,14 @@ export function TriggerRunDialog({
 
           {result ? (
             <Alert>
-              <AlertTitle>Run recorded — nothing was sent</AlertTitle>
+              <AlertTitle>
+                {mock ? "Run recorded — nothing was sent" : "Run completed"}
+              </AlertTitle>
               <AlertDescription>
                 {result.result?.detail ??
-                  "The trigger completed only as a console record."}{" "}
+                  (mock
+                    ? "The trigger completed only as a console record."
+                    : "The trigger ran and recorded its execution.")}{" "}
                 Reference:{" "}
                 <span className="font-mono">
                   {result.result?.reference ?? result.id}
@@ -291,7 +300,9 @@ export function TriggerRunDialog({
           ) : null}
 
           <p className="text-muted-foreground text-xs">
-            Blocked run: the dashboard refuses to fake an external effect.
+            {mock
+              ? "Blocked run: the dashboard refuses to fake an external effect. "
+              : ""}
             {trigger.backendNote}
           </p>
         </form>
@@ -361,8 +372,7 @@ function RunField({
           <SelectContent>
             {openContacts.map((contact) => (
               <SelectItem key={contact.id} value={contact.id}>
-                {contact.contact.displayName} ·{" "}
-                {maskPhone(contact.contact.phone)}
+                {contact.contact.displayName} · {contact.contact.maskedPhone}
               </SelectItem>
             ))}
           </SelectContent>

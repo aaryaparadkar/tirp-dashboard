@@ -8,8 +8,9 @@ const MAX_LENGTH = 4000
 
 /**
  * Operator reply composer. Nothing is sent automatically: submit (button or
- * Ctrl/⌘+Enter) hands the draft to the adapter, which currently reports the
- * Phase 3 "unsupported" error — surfaced inline by the caller.
+ * Ctrl/⌘+Enter) hands the draft to the active adapter. On fixtures that
+ * reports the structured "unsupported" error; against `tirp-server` it sends
+ * the reply. The caller surfaces either outcome inline.
  */
 export function ReplyComposer({
   onSend,

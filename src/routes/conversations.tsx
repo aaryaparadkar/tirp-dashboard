@@ -16,7 +16,6 @@ import {
   DEFAULT_FILTERS,
   type ConversationFilters as Filters,
 } from "@/lib/api/types"
-import { MOCK_NOW } from "@/lib/api/mock-data"
 
 export const Route = createFileRoute("/conversations")({
   validateSearch: (search: Record<string, unknown>): { c?: string } => ({
@@ -40,9 +39,8 @@ function ConversationsPage() {
   )
 
   const list = useConversationList(effectiveFilters)
-  // Fixture snapshot time; the HTTP adapter replaces this with a response
-  // header later.
-  const generatedAt = MOCK_NOW
+  // Snapshot time from the latest list response (fixtures or tirp-server).
+  const generatedAt = list.generatedAt
 
   return (
     <div className="flex w-full flex-col gap-6">
@@ -103,7 +101,6 @@ function ConversationsPage() {
             <ConversationDetail
               conversationId={selectedId}
               onPatchSummary={list.patchLocal}
-              generatedAt={generatedAt}
             />
           )}
         </PageSection>

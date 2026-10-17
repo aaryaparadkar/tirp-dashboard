@@ -173,8 +173,11 @@ export const LANGUAGE_LABEL: Record<DashboardLanguage, string> = {
 
 export interface ContactRef {
   id: string
-  /** Raw E.164 number. Never logged, stored, or directly rendered. */
-  phone: string
+  /**
+   * Masked number for display, e.g. "+61 ••• ••• 620". The browser never
+   * receives the raw E.164 value — masking happens server-side.
+   */
+  maskedPhone: string
   displayName: string
   /** Two-letter fallback for the avatar. */
   initials: string
@@ -345,7 +348,8 @@ export interface TriggerDefinition {
   fields: TriggerField[]
 }
 
-export type TriggerExecutionStatus = "success" | "failed" | "rejected"
+export type TriggerExecutionStatus =
+  "running" | "success" | "failed" | "rejected"
 
 export interface TriggerExecution {
   id: string
@@ -373,6 +377,7 @@ export type ApiErrorCode =
   | "rate_limited"
   | "not_found"
   | "validation"
+  | "conflict"
   | "unavailable"
   | "unsupported"
   | "network"
@@ -394,7 +399,42 @@ export interface Page<T> {
   pageSize: number
   total: number
   totalPages: number
+  /** Server snapshot time for the page; relative labels derive from it. */
+  generatedAt: string
 }
 
 /** Promise rejection type used across the client layer. */
 export type ClientError = ApiError
+
+/* --------------------------------------------------------------- session */
+
+export type OperatorRole = "viewer" | "operator" | "supervisor" | "admin"
+
+export const OPERATOR_ROLE_LABEL: Record<OperatorRole, string> = {
+  viewer: "Viewer",
+  operator: "Operator",
+  supervisor: "Supervisor",
+  admin: "Administrator",
+}
+
+export interface Operator {
+  id: string
+  email: string
+  name: string
+  role: OperatorRole
+}
+
+/** Authenticated operator session returned by the dashboard backend. */
+export interface SessionInfo {
+  operator: Operator
+  /** Double-submit token required on every mutation. */
+  csrfToken: string
+  expiresAt: string
+}
+
+/** Outcome of an escalation, including partial success. */
+export interface EscalationResult {
+  summary: ConversationSummary
+  notified: boolean
+  partialError?: string
+}

@@ -26,7 +26,7 @@ import {
   STATUS_TONE,
   type ConversationSummary,
 } from "@/lib/api/types"
-import { formatClock, maskPhone, relativeAgo } from "@/lib/format"
+import { formatClock, relativeAgo } from "@/lib/format"
 
 /**
  * Most recent conversations, one row per chat, each leading to the
@@ -106,7 +106,7 @@ export function RecentConversations({
                     </Link>
                   </TableCell>
                   <TableCell className="text-muted-foreground hidden font-mono text-xs sm:table-cell">
-                    {maskPhone(row.contact.phone)}
+                    {row.contact.maskedPhone}
                   </TableCell>
                   <TableCell className="hidden text-sm md:table-cell">
                     {INTENT_LABEL[row.intent]}

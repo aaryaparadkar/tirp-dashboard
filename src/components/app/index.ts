@@ -1,5 +1,6 @@
 export { AppShell } from "./app-shell"
 export { AppSidebar } from "./app-sidebar"
+export { AuthGate } from "./auth-gate"
 export { BrandMark } from "./brand-mark"
 export { DemoDataNote } from "./demo-data-note"
 export { EmptyState } from "./empty-state"

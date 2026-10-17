@@ -1,4 +1,6 @@
+import { useState } from "react"
 import { Link, useRouterState } from "@tanstack/react-router"
+import { LogOutIcon } from "lucide-react"
 
 import {
   Sidebar,
@@ -14,7 +16,12 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar"
+import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
+import { isMockAdapter, logoutOperator } from "@/lib/api/client"
+import { OPERATOR_ROLE_LABEL } from "@/lib/api/types"
 import { APP_NAME, APP_TAGLINE, NAV_SECTIONS } from "@/lib/navigation"
+import { useSession } from "@/hooks/use-session"
 
 import { BrandMark } from "./brand-mark"
 
@@ -24,6 +31,19 @@ export function AppSidebar() {
   })
   const { state } = useSidebar()
   const collapsed = state === "collapsed"
+  const mock = isMockAdapter()
+  const { session } = useSession()
+  const [signingOut, setSigningOut] = useState(false)
+
+  async function handleSignOut() {
+    if (signingOut) return
+    setSigningOut(true)
+    try {
+      await logoutOperator()
+    } finally {
+      setSigningOut(false)
+    }
+  }
 
   return (
     <Sidebar collapsible="icon" aria-label="Primary">
@@ -76,13 +96,42 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter>
-        <div className="text-muted-foreground flex items-center gap-2 rounded-md px-2 py-1.5 text-xs group-data-[collapsible=icon]:hidden">
-          <span
-            aria-hidden="true"
-            className="bg-warning size-1.5 shrink-0 rounded-full"
-          />
-          <span>Development snapshot · fixture data</span>
-        </div>
+        {mock ? (
+          <div className="text-muted-foreground flex items-center gap-2 rounded-md px-2 py-1.5 text-xs group-data-[collapsible=icon]:hidden">
+            <span
+              aria-hidden="true"
+              className="bg-warning size-1.5 shrink-0 rounded-full"
+            />
+            <span>Development snapshot · fixture data</span>
+          </div>
+        ) : session ? (
+          <div className="flex flex-col gap-1 group-data-[collapsible=icon]:hidden">
+            <div className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs">
+              <span
+                aria-hidden="true"
+                className="bg-success size-1.5 shrink-0 rounded-full"
+              />
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate font-medium">
+                  {session.operator.name}
+                </span>
+                <span className="text-muted-foreground truncate">
+                  {OPERATOR_ROLE_LABEL[session.operator.role]} · signed in
+                </span>
+              </span>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="min-h-11 justify-start"
+              onClick={handleSignOut}
+              disabled={signingOut}
+            >
+              {signingOut ? <Spinner /> : <LogOutIcon aria-hidden="true" />}
+              Sign out
+            </Button>
+          </div>
+        ) : null}
       </SidebarFooter>
 
       <SidebarRail />

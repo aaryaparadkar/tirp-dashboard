@@ -8,14 +8,19 @@ import {
 } from "@tanstack/react-router"
 import { CompassIcon } from "lucide-react"
 
-import { AppShell, EmptyState, ErrorState } from "@/components/app"
+import { AppShell, AuthGate, EmptyState, ErrorState } from "@/components/app"
 import { Toaster } from "@/components/ui/sonner"
 import { Button } from "@/components/ui/button"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { initialiseDashboardAdapter } from "@/lib/api/client"
 import { APP_NAME, APP_TAGLINE } from "@/lib/navigation"
 import { THEME_INIT_SCRIPT } from "@/lib/theme"
 
 import appCss from "@/styles.css?url"
+
+// Install the selected dashboard adapter (fixtures or tirp-server) before any
+// route reads data. Idempotent, so it is safe under HMR and SSR.
+initialiseDashboardAdapter()
 
 export const Route = createRootRoute({
   head: () => ({
@@ -48,7 +53,9 @@ function RootDocument({ children }: { children: ReactNode }) {
       </head>
       <body>
         <TooltipProvider delayDuration={200}>
-          <AppShell>{children}</AppShell>
+          <AuthGate>
+            <AppShell>{children}</AppShell>
+          </AuthGate>
         </TooltipProvider>
         <Toaster position="top-center" closeButton />
         <Scripts />

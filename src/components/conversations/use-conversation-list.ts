@@ -4,6 +4,7 @@ import {
   CONVERSATION_PAGE_SIZE,
   getDashboardAdapter,
 } from "@/lib/api/dashboard"
+import { MOCK_NOW } from "@/lib/api/mock-data"
 import {
   type ConversationFilters,
   type ConversationSummary,
@@ -20,6 +21,8 @@ export interface ConversationList {
   refreshing: boolean
   error: string | null
   hasMore: boolean
+  /** Snapshot time from the latest response; drives relative labels. */
+  generatedAt: string
   loadMore: () => void
   refetch: () => void
   /** Local-only badge/state fixups so the list keeps up with the detail pane. */
@@ -40,6 +43,7 @@ export function useConversationList(
 ): ConversationList {
   const [items, setItems] = useState<ConversationSummary[]>([])
   const [total, setTotal] = useState(0)
+  const [generatedAt, setGeneratedAt] = useState<string>(MOCK_NOW)
   const [state, setState] = useState<"initial" | "ready" | "error">("initial")
   const [loadingMore, setLoadingMore] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -55,17 +59,19 @@ export function useConversationList(
   const pendingKey = useRef<string>(filterKey)
 
   const run = useCallback(
-    async (mode: "replace" | "more") => {
+    async (mode: "replace" | "more", signal?: AbortSignal) => {
       const key = localKey.current
       const page = mode === "replace" ? 1 : pageRef.current + 1
       try {
         const result = await getDashboardAdapter().listConversations(
           filtersRef.current,
           { page, pageSize },
+          signal,
         )
-        if (key !== pendingKey.current) return
+        if (key !== pendingKey.current || signal?.aborted) return
         pageRef.current = page
         setTotal(result.total)
+        setGeneratedAt(result.generatedAt)
         setItems((previous) =>
           mode === "replace"
             ? result.data
@@ -79,7 +85,7 @@ export function useConversationList(
         setState("ready")
         setError(null)
       } catch (thrown) {
-        if (key !== pendingKey.current) return
+        if (key !== pendingKey.current || signal?.aborted) return
         setError(
           thrown instanceof Error
             ? thrown.message
@@ -94,13 +100,15 @@ export function useConversationList(
   useEffect(() => {
     if (filterKey === localKey.current && state !== "error" && items.length > 0)
       return
+    const controller = new AbortController()
     localKey.current = filterKey
     pendingKey.current = filterKey
     pageRef.current = 1
     setItems([])
     setTotal(0)
     setState("initial")
-    void run("replace")
+    void run("replace", controller.signal)
+    return () => controller.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterKey])
 
@@ -134,6 +142,7 @@ export function useConversationList(
     refreshing,
     error,
     hasMore: hasMore(items.length, total),
+    generatedAt,
     loadMore,
     refetch,
     patchLocal,
