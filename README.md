@@ -85,7 +85,13 @@ For a tunnel or HTTPS deployment, use the real dashboard origin and set
 ```env
 DASHBOARD_ALLOWED_ORIGINS=https://dashboard.example.com
 DASHBOARD_COOKIE_SECURE=true
+DASHBOARD_COOKIE_SAMESITE=None
 ```
+
+`DASHBOARD_COOKIE_SAMESITE=None` is required when the dashboard and API are
+on different sites, such as a dashboard on `localhost:3000` calling a
+`trycloudflare.com` API. It requires HTTPS and secure cookies. Keep `Lax` for
+same-site local development.
 
 Keep the operator password and provider secrets only in the server `.env`.
 They must never be copied into the frontend environment.

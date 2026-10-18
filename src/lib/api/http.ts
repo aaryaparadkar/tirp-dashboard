@@ -26,7 +26,7 @@ const ERROR_CODES: readonly ApiErrorCode[] = [
 export function apiBase(): string {
   const raw =
     (import.meta.env.VITE_DASHBOARD_API_BASE as string | undefined) ?? ""
-  return raw.replace(/\/$/, "")
+  return raw.trim().replace(/\/$/, "")
 }
 
 let csrfToken: string | null = null
