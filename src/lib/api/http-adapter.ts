@@ -99,11 +99,22 @@ export function createHttpAdapter(): DashboardAdapter {
       return toPage(server)
     },
 
-    getConversation(id: string, signal?: AbortSignal) {
-      return apiRequest<ConversationDetail>(
-        `/dashboard/conversations/${encoded(id)}`,
-        { signal },
-      )
+    async getConversation(id: string, signal?: AbortSignal) {
+      const server = await apiRequest<
+        ConversationDetail & {
+          onboarding?: {
+            travelDate: string | null
+            quizDueAt: string | null
+            isDue: boolean
+            optedIn: boolean
+            sent: boolean
+          } | null
+        }
+      >(`/dashboard/conversations/${encoded(id)}`, { signal })
+      return {
+        ...server,
+        onboarding: server.onboarding ?? null,
+      }
     },
 
     async sendMessage(draft: MessageDraft) {

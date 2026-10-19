@@ -212,6 +212,15 @@ export interface ConversationDetail {
   summaryLines: string[]
   /** Knowledge-base sources most recently cited in the thread. */
   recentSources: { id: string; title: string; url: string }[]
+  onboarding: OnboardingProfile | null
+}
+
+export interface OnboardingProfile {
+  travelDate: string | null
+  quizDueAt: string | null
+  isDue: boolean
+  optedIn: boolean
+  sent: boolean
 }
 
 /* -------------------------------------------------------------- filters */

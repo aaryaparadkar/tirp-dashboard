@@ -270,6 +270,7 @@ function detailFor(summary: ConversationSummary): ConversationDetail {
     messages: threadFor(summary),
     summaryLines: SUMMARY_LINES[summary.id] ?? SUMMARY_LINES_STUB,
     recentSources: RECENT_SOURCES[summary.id] ?? [],
+    onboarding: null,
   }
 }
 

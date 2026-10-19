@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react"
 import { Link } from "@tanstack/react-router"
 import { toast } from "sonner"
-import { ArrowLeftIcon, BookOpenTextIcon, ReceiptTextIcon } from "lucide-react"
+import { ArrowLeftIcon, MessageCircleIcon, UserRoundIcon } from "lucide-react"
 
 import { ConversationActions } from "@/components/conversations/conversation-actions"
 import { MessageTimeline } from "@/components/conversations/message-timeline"
@@ -27,7 +27,7 @@ import {
   type ConversationSummary,
   type Message,
 } from "@/lib/api/types"
-import { formatDateTime, relativeAgo } from "@/lib/format"
+import { formatDateTime, formatDay, relativeAgo } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 /**
@@ -131,6 +131,7 @@ function ConversationDetailBody({
   className?: string
 }) {
   const [unreadOverride, setUnreadOverride] = useState<number | null>(null)
+  const [activePanel, setActivePanel] = useState<"chat" | "profile">("chat")
   const summary: ConversationSummary = {
     ...detail.summary,
     unreadCount: unreadOverride ?? detail.summary.unreadCount,
@@ -234,28 +235,30 @@ function ConversationDetailBody({
         generatedAt={generatedAt}
         onToggleUnread={handleToggleUnread}
         onUpdated={handleUpdated}
+        onOpenProfile={() => setActivePanel("profile")}
       />
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>
 
       <Tabs
-        defaultValue="timeline"
+        value={activePanel}
+        onValueChange={(value) => setActivePanel(value as "chat" | "profile")}
         className="flex min-h-0 flex-1 flex-col gap-3"
       >
         <TabsList>
-          <TabsTrigger value="timeline">
-            <ReceiptTextIcon aria-hidden="true" />
-            Timeline
+          <TabsTrigger value="chat">
+            <MessageCircleIcon aria-hidden="true" />
+            Chat
           </TabsTrigger>
-          <TabsTrigger value="details">
-            <BookOpenTextIcon aria-hidden="true" />
-            Details
+          <TabsTrigger value="profile">
+            <UserRoundIcon aria-hidden="true" />
+            Profile
           </TabsTrigger>
         </TabsList>
 
         <TabsContent
-          value="timeline"
+          value="chat"
           className="flex min-h-0 flex-1 flex-col gap-3"
         >
           <Card className="flex min-h-0 flex-1 flex-col">
@@ -273,8 +276,8 @@ function ConversationDetailBody({
           </Card>
         </TabsContent>
 
-        <TabsContent value="details">
-          <DetailFacts summary={summary} detail={detail} />
+        <TabsContent value="profile">
+          <ProfilePanel summary={summary} detail={detail} />
         </TabsContent>
       </Tabs>
     </div>
@@ -286,11 +289,13 @@ function DetailHeader({
   generatedAt,
   onToggleUnread,
   onUpdated,
+  onOpenProfile,
 }: {
   summary: ConversationSummary
   generatedAt: string
   onToggleUnread: (unread: boolean) => void
   onUpdated: (summary: ConversationSummary) => void
+  onOpenProfile: () => void
 }) {
   return (
     <Card size="sm">
@@ -311,9 +316,14 @@ function DetailHeader({
             <AvatarFallback>{summary.contact.initials}</AvatarFallback>
           </Avatar>
           <div className="flex min-w-0 flex-col gap-1">
-            <h2 className="text-lg font-semibold tracking-tight">
+            <button
+              type="button"
+              className="focus-visible:ring-ring w-fit rounded-md text-left text-lg font-semibold tracking-tight outline-none focus-visible:ring-2"
+              onClick={onOpenProfile}
+              aria-label={`Open profile for ${summary.contact.displayName}`}
+            >
               {summary.contact.displayName}
-            </h2>
+            </button>
             <p className="text-muted-foreground font-mono text-xs">
               {summary.contact.maskedPhone}
             </p>
@@ -344,7 +354,7 @@ function DetailHeader({
   )
 }
 
-function DetailFacts({
+function ProfilePanel({
   summary,
   detail,
 }: {
@@ -382,8 +392,85 @@ function DetailFacts({
   ]
 
   return (
+    <div className="flex flex-col gap-4">
+      <OnboardingProfileCard profile={detail.onboarding} />
+      <Card>
+        <CardContent className="flex flex-col gap-5">
+          <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+            {facts.map((fact) => (
+              <div key={fact.label} className="flex flex-col gap-0.5">
+                <dt className="text-muted-foreground text-xs">{fact.label}</dt>
+                <dd className="text-sm">{fact.value}</dd>
+              </div>
+            ))}
+          </dl>
+          <Separator />
+          <div className="flex flex-col gap-2">
+            <p className="text-sm font-medium">Session notes</p>
+            <ul className="text-muted-foreground flex list-disc flex-col gap-1 pl-4 text-sm">
+              {detail.summaryLines.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </div>
+          {detail.recentSources.length > 0 ? (
+            <>
+              <Separator />
+              <div className="flex flex-col gap-2">
+                <p className="text-sm font-medium">
+                  Knowledge-base sources cited
+                </p>
+                <ul className="text-muted-foreground flex flex-col gap-1.5 text-sm">
+                  {detail.recentSources.map((source) => (
+                    <li key={source.id} className="flex flex-col">
+                      <span>{source.title}</span>
+                      <span className="font-mono text-xs">{source.id}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </>
+          ) : null}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function OnboardingProfileCard({
+  profile,
+}: {
+  profile: ConversationDetail["onboarding"]
+}) {
+  const facts = profile
+    ? [
+        {
+          label: "Planned arrival",
+          value: profile.travelDate
+            ? formatDay(`${profile.travelDate}T00:00:00Z`)
+            : "Not recorded",
+        },
+        {
+          label: "Quiz scheduled",
+          value: profile.quizDueAt
+            ? `${formatDateTime(profile.quizDueAt)} AEDT`
+            : "Not scheduled",
+        },
+        { label: "Due now", value: profile.isDue ? "Yes" : "No" },
+        { label: "Quiz opted in", value: profile.optedIn ? "Yes" : "No" },
+        { label: "Invite sent", value: profile.sent ? "Yes" : "No" },
+      ]
+    : [{ label: "Onboarding", value: "No onboarding record" }]
+
+  return (
     <Card>
-      <CardContent className="flex flex-col gap-5">
+      <CardContent className="flex flex-col gap-4">
+        <div>
+          <h3 className="font-semibold">Onboarding profile</h3>
+          <p className="text-muted-foreground text-sm">
+            Arrival and quiz scheduling details from the server.
+          </p>
+        </div>
         <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
           {facts.map((fact) => (
             <div key={fact.label} className="flex flex-col gap-0.5">
@@ -392,33 +479,6 @@ function DetailFacts({
             </div>
           ))}
         </dl>
-        <Separator />
-        <div className="flex flex-col gap-2">
-          <p className="text-sm font-medium">Session notes</p>
-          <ul className="text-muted-foreground flex list-disc flex-col gap-1 pl-4 text-sm">
-            {detail.summaryLines.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
-        </div>
-        {detail.recentSources.length > 0 ? (
-          <>
-            <Separator />
-            <div className="flex flex-col gap-2">
-              <p className="text-sm font-medium">
-                Knowledge-base sources cited
-              </p>
-              <ul className="text-muted-foreground flex flex-col gap-1.5 text-sm">
-                {detail.recentSources.map((source) => (
-                  <li key={source.id} className="flex flex-col">
-                    <span>{source.title}</span>
-                    <span className="font-mono text-xs">{source.id}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </>
-        ) : null}
       </CardContent>
     </Card>
   )
