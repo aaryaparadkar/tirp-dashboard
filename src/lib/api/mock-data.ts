@@ -1152,7 +1152,7 @@ export const TRIGGERS: TriggerDefinition[] = [
     id: "quiz",
     name: "Start quiz session",
     description:
-      "Delivers the OSHC quiz to a contact by phone number. Validates E.164, rate-limits to 5 starts per minute per contact, and resumes an active session instead of starting a new one.",
+      "Delivers the next OSHC quiz session to a contact as tap-to-answer questions. Students earn XP towards a free health checkup. Rate-limited to 5 starts per minute per contact; resumes an active session instead of starting a new one.",
     intendedUse: "Kick off a weekly quiz for one student.",
     backendNote:
       "Maps to tirp-server POST /quiz/start (Bearer token). A browser cannot hold the trigger token, so Phase 3 should proxy this through a dashboard API with server-side auth.",
@@ -1218,27 +1218,6 @@ export const TRIGGERS: TriggerDefinition[] = [
         description: "Plain text; sent as-is.",
         required: true,
         maxLength: 4000,
-      },
-    ],
-  },
-  {
-    id: "escalate",
-    name: "Escalate conversation",
-    description:
-      "Hands a conversation to the human support desk and stops AI replies until resolution.",
-    intendedUse:
-      "Human takeover when the assistant hits its limits or the contact asks for a person.",
-    backendNote:
-      "Requires an operator endpoint to mark handling mode and notify the desk.",
-    availability: "coming_soon",
-    availabilityNote: "Blocked on Phase 3 operator API.",
-    fields: [
-      {
-        id: "conversation",
-        kind: "conversation",
-        label: "Conversation",
-        description: "Pick an open conversation.",
-        required: true,
       },
     ],
   },
