@@ -1,7 +1,6 @@
 import {
   MessagesSquareIcon,
   LayoutDashboard,
-  Palette,
   type LucideIcon,
   ZapIcon,
 } from "lucide-react"
@@ -47,17 +46,6 @@ export const NAV_SECTIONS: NavSection[] = [
         to: "/triggers",
         icon: ZapIcon,
         description: "Launch catalogue, quiz, and escalation flows.",
-      },
-    ],
-  },
-  {
-    label: "Foundations",
-    items: [
-      {
-        title: "Design system",
-        to: "/design-system",
-        icon: Palette,
-        description: "Tokens, components, and patterns.",
       },
     ],
   },
