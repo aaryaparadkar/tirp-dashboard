@@ -18,6 +18,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { EmergencyQueue } from "@/components/overview/emergency-queue"
 import { EnquiriesOverTime } from "@/components/overview/enquiries-over-time"
 import { IntentMix } from "@/components/overview/intent-mix"
 import { KpiCard } from "@/components/overview/kpi-card"
@@ -25,6 +26,7 @@ import { RecentConversations } from "@/components/overview/recent-conversations"
 import { ShareRows } from "@/components/overview/share-rows"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useDashboardQuery } from "@/hooks/use-dashboard-query"
+import { useOpenEmergencies } from "@/hooks/use-open-emergencies"
 import { getDashboardAdapter } from "@/lib/api/dashboard"
 import {
   DEFAULT_FILTERS,
@@ -52,6 +54,7 @@ function Overview() {
     [],
   )
 
+  const emergencies = useOpenEmergencies()
   const refreshing = overview.refreshing
 
   return (
@@ -98,6 +101,11 @@ function Overview() {
       {overview.data ? (
         <div className="flex flex-col gap-8" aria-busy={refreshing}>
           <DemoDataNote generatedAt={overview.data.generatedAt} />
+
+          <EmergencyQueue
+            items={emergencies.open}
+            generatedAt={overview.data.generatedAt}
+          />
 
           <PageSection
             id="kpis"

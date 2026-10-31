@@ -51,6 +51,7 @@ export function ConversationFilters({
     filters.handling !== DEFAULT_FILTERS.handling ||
     filters.direction !== DEFAULT_FILTERS.direction ||
     filters.hasError !== DEFAULT_FILTERS.hasError ||
+    filters.emergency !== DEFAULT_FILTERS.emergency ||
     filters.range !== DEFAULT_FILTERS.range ||
     filters.sort !== DEFAULT_FILTERS.sort
 
@@ -149,6 +150,18 @@ export function ConversationFilters({
           options={[{ value: "with-error", label: "With errors" }]}
           onChange={(next) =>
             onChange({ ...filters, hasError: next as typeof filters.hasError })
+          }
+        />
+        <FilterSelect
+          ariaLabel="Filter by emergency flag"
+          value={filters.emergency}
+          allLabel="Any flag"
+          options={[{ value: "only", label: "Emergency (000 shown)" }]}
+          onChange={(next) =>
+            onChange({
+              ...filters,
+              emergency: next as typeof filters.emergency,
+            })
           }
         />
         <RangeSelect

@@ -69,10 +69,11 @@ function TriggersPage() {
           handling: "all",
           direction: "all",
           hasError: "all",
+          emergency: "all",
           range: "30d",
           sort: "recent",
         },
-        { page: 1, pageSize: 12 },
+        { page: 1, pageSize: 50 },
       ),
     [],
   )
@@ -94,6 +95,18 @@ function TriggersPage() {
       ),
     [conversations.data],
   )
+
+  // One row per contact (newest conversation wins) for phone-targeted triggers.
+  const contacts = useMemo(() => {
+    const seen = new Set<string>()
+    const rows: ConversationSummary[] = []
+    for (const item of conversations.data?.data ?? []) {
+      if (seen.has(item.contact.id)) continue
+      seen.add(item.contact.id)
+      rows.push(item)
+    }
+    return rows
+  }, [conversations.data])
 
   const grouped = useMemo(() => {
     const groups = new Map<TriggerAvailability, TriggerDefinition[]>()
@@ -176,6 +189,7 @@ function TriggersPage() {
       <TriggerRunDialog
         trigger={runTarget}
         openContacts={openContacts}
+        contacts={contacts}
         open={runTarget !== null}
         onOpenChange={(open) => {
           if (!open) setRunTarget(null)

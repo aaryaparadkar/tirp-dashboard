@@ -139,16 +139,24 @@ function Fact({
   )
 }
 
+/** Select value prefix for a contact picked from a conversation. */
+const PICKED = "conv:"
+/** Select value that reveals the manual phone input. */
+const MANUAL = "__manual__"
+
 /** Run flow: explain → collect → validate → confirm → honest result. */
 export function TriggerRunDialog({
   trigger,
   openContacts,
+  contacts,
   open,
   onOpenChange,
 }: {
   trigger: TriggerDefinition | null
   /** Open/new conversations offered to `conversation`-targeted triggers. */
   openContacts: ConversationSummary[]
+  /** Every known contact (one row per contact) offered to phone triggers. */
+  contacts: ConversationSummary[]
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
@@ -165,14 +173,27 @@ export function TriggerRunDialog({
   async function confirmRun() {
     if (!trigger) return
     const problems: string[] = []
+    let pickedConversation = ""
+    let manualPhone = ""
     for (const field of trigger.fields) {
       const value = (values[field.id] ?? "").trim()
-      if (field.required && value === "") {
-        problems.push(`${field.label} is required.`)
+      if (field.kind === "phone") {
+        if (value.startsWith(PICKED)) {
+          pickedConversation = value.slice(PICKED.length)
+          continue
+        }
+        manualPhone = value === MANUAL ? "" : value
+        if (field.required && manualPhone === "") {
+          problems.push(
+            `Pick a contact or enter a number for ${field.label.toLowerCase()}.`,
+          )
+        } else if (manualPhone !== "" && !looksLikeE164(manualPhone)) {
+          problems.push("The number must look like +61412345620.")
+        }
         continue
       }
-      if (field.kind === "phone" && value !== "" && !looksLikeE164(value)) {
-        problems.push(`${field.label} must look like +61412345620.`)
+      if (field.required && value === "") {
+        problems.push(`${field.label} is required.`)
       }
     }
     if (problems.length > 0) {
@@ -184,9 +205,11 @@ export function TriggerRunDialog({
     setError(null)
     try {
       const execution: TriggerExecution = await runTrigger(trigger.id, {
-        phone: values.phone ?? "",
+        phone: manualPhone,
         message: values.message ?? "",
-        conversationId: values.conversation ?? "",
+        // A picked contact is sent as its conversation; the server resolves
+        // the real number (the console only ever sees masked phones).
+        conversationId: pickedConversation || (values.conversation ?? ""),
       })
       setResult(execution)
       toast.success(mock ? "Run recorded" : "Trigger completed", {
@@ -258,6 +281,7 @@ export function TriggerRunDialog({
               id={`trigger-field-${field.id}`}
               field={field}
               openContacts={openContacts}
+              contacts={contacts}
               value={values[field.id] ?? ""}
               onValueChange={(next) =>
                 setValues((previous) => ({ ...previous, [field.id]: next }))
@@ -336,6 +360,7 @@ function RunField({
   id,
   field,
   openContacts,
+  contacts,
   value,
   onValueChange,
   disabled,
@@ -343,6 +368,7 @@ function RunField({
   id: string
   field: TriggerDefinition["fields"][number]
   openContacts: ConversationSummary[]
+  contacts: ConversationSummary[]
   value: string
   onValueChange: (next: string) => void
   disabled?: boolean
@@ -355,7 +381,17 @@ function RunField({
         {field.label}
         {field.required ? <span className="text-destructive"> *</span> : null}
       </Label>
-      {field.kind === "conversation" ? (
+      {field.kind === "phone" ? (
+        <ContactPicker
+          id={id}
+          describedBy={describedBy}
+          contacts={contacts}
+          value={value}
+          onValueChange={onValueChange}
+          disabled={disabled}
+          required={field.required}
+        />
+      ) : field.kind === "conversation" ? (
         <Select
           value={value}
           onValueChange={onValueChange}
@@ -383,7 +419,7 @@ function RunField({
           value={value}
           onChange={(event) => onValueChange(event.target.value)}
           maxLength={field.maxLength}
-          inputMode={field.kind === "phone" ? "tel" : "text"}
+          inputMode="text"
           aria-describedby={describedBy}
           disabled={disabled}
           placeholder={PLACEHOLDER[field.kind as TriggerFieldKind]}
@@ -393,6 +429,73 @@ function RunField({
         <p id={describedBy} className="text-muted-foreground text-xs">
           {field.description}
         </p>
+      ) : null}
+    </div>
+  )
+}
+
+/**
+ * Contact dropdown for phone-targeted triggers (same pattern as Escalate),
+ * with a manual-entry option for someone who has not messaged yet.
+ */
+function ContactPicker({
+  id,
+  describedBy,
+  contacts,
+  value,
+  onValueChange,
+  disabled,
+  required,
+}: {
+  id: string
+  describedBy: string
+  contacts: ConversationSummary[]
+  value: string
+  onValueChange: (next: string) => void
+  disabled?: boolean
+  required?: boolean
+}) {
+  const manual = value !== "" && !value.startsWith(PICKED)
+  const selectValue = manual ? MANUAL : value
+  return (
+    <div className="flex flex-col gap-2">
+      <Select
+        value={selectValue}
+        onValueChange={(next) => onValueChange(next === MANUAL ? MANUAL : next)}
+        disabled={disabled}
+        required={required}
+      >
+        <SelectTrigger
+          id={id}
+          className="w-full"
+          aria-describedby={describedBy}
+        >
+          <SelectValue placeholder="Choose a contact" />
+        </SelectTrigger>
+        <SelectContent>
+          {contacts.map((contact) => (
+            <SelectItem key={contact.id} value={`${PICKED}${contact.id}`}>
+              {contact.contact.displayName} · {contact.contact.maskedPhone}
+            </SelectItem>
+          ))}
+          <SelectItem value={MANUAL}>Enter a number…</SelectItem>
+        </SelectContent>
+      </Select>
+      {manual ? (
+        <Input
+          id={`${id}-manual`}
+          aria-label="Phone number (E.164)"
+          value={value === MANUAL ? "" : value}
+          onChange={(event) =>
+            onValueChange(
+              event.target.value === "" ? MANUAL : event.target.value,
+            )
+          }
+          inputMode="tel"
+          autoFocus
+          disabled={disabled}
+          placeholder={PLACEHOLDER.phone}
+        />
       ) : null}
     </div>
   )

@@ -6,7 +6,12 @@ import { ArrowLeftIcon, MessageCircleIcon, UserRoundIcon } from "lucide-react"
 import { ConversationActions } from "@/components/conversations/conversation-actions"
 import { MessageTimeline } from "@/components/conversations/message-timeline"
 import { ReplyComposer } from "@/components/conversations/reply-composer"
-import { ErrorState, StatusBadge } from "@/components/app"
+import {
+  EmergencyAlert,
+  EmergencyBadge,
+  ErrorState,
+  StatusBadge,
+} from "@/components/app"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -328,6 +333,7 @@ function DetailHeader({
               {summary.contact.maskedPhone}
             </p>
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <EmergencyBadge conversation={summary} />
               <StatusBadge tone={STATUS_TONE[summary.status]}>
                 {STATUS_LABEL[summary.status]}
               </StatusBadge>
@@ -350,6 +356,11 @@ function DetailHeader({
           onUpdated={onUpdated}
         />
       </CardContent>
+      {summary.emergencyAt ? (
+        <CardContent>
+          <EmergencyAlert conversation={summary} generatedAt={generatedAt} />
+        </CardContent>
+      ) : null}
     </Card>
   )
 }

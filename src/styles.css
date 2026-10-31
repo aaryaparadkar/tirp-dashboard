@@ -100,14 +100,16 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  /* Radius scale — driven by the single --radius token */
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  /* Radius scale — proportional to the single --radius token, so setting
+     --radius: 0 squares every surface (cards, inputs, buttons, badges).
+     Explicit rounded-full (avatars, dots, switch thumbs) is unaffected. */
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 12px);
-  --radius-4xl: calc(var(--radius) + 16px);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 
   /* Motion — expressive but restrained */
   --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
@@ -121,7 +123,8 @@
 
 /* 5. Light tokens --------------------------------------------------------- */
 :root {
-  --radius: 0.625rem;
+  /* Sharp console: square corners everywhere. */
+  --radius: 0rem;
 
   /* Cool, quiet canvas — reads as a work surface, not a document. */
   --background: oklch(0.984 0.003 240);

@@ -3,6 +3,7 @@ import { Link, useRouterState } from "@tanstack/react-router"
 import { LogOutIcon } from "lucide-react"
 
 import {
+  SidebarMenuBadge,
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -22,6 +23,7 @@ import { isMockAdapter, logoutOperator } from "@/lib/api/client"
 import { OPERATOR_ROLE_LABEL } from "@/lib/api/types"
 import { APP_NAME, APP_TAGLINE, NAV_SECTIONS } from "@/lib/navigation"
 import { useSession } from "@/hooks/use-session"
+import { useOpenEmergencies } from "@/hooks/use-open-emergencies"
 
 import { BrandMark } from "./brand-mark"
 
@@ -33,6 +35,8 @@ export function AppSidebar() {
   const collapsed = state === "collapsed"
   const mock = isMockAdapter()
   const { session } = useSession()
+  const emergencies = useOpenEmergencies()
+  const emergencyCount = emergencies.open.length
   const [signingOut, setSigningOut] = useState(false)
 
   async function handleSignOut() {
@@ -85,8 +89,23 @@ export function AppSidebar() {
                       <Link to={item.to}>
                         <item.icon aria-hidden="true" />
                         <span>{item.title}</span>
+                        {item.to === "/conversations" && emergencyCount > 0 ? (
+                          <span className="sr-only">
+                            , {emergencyCount} open{" "}
+                            {emergencyCount === 1 ? "emergency" : "emergencies"}
+                          </span>
+                        ) : null}
                       </Link>
                     </SidebarMenuButton>
+                    {item.to === "/conversations" && emergencyCount > 0 ? (
+                      <SidebarMenuBadge
+                        aria-hidden="true"
+                        title={`${emergencyCount} open ${emergencyCount === 1 ? "emergency" : "emergencies"} (Call 000 shown)`}
+                        className="bg-destructive text-destructive-foreground peer-hover/menu-button:text-destructive-foreground peer-data-active/menu-button:text-destructive-foreground"
+                      >
+                        000 · {emergencyCount}
+                      </SidebarMenuBadge>
+                    ) : null}
                   </SidebarMenuItem>
                 ))}
               </SidebarMenu>

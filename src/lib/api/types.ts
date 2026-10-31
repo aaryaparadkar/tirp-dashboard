@@ -203,6 +203,13 @@ export interface ConversationSummary {
   unreadCount: number
   hasError: boolean
   language: DashboardLanguage
+  /**
+   * When the assistant last showed the contact the "Call 000" emergency
+   * button (ISO 8601), or null/absent if it never did.
+   */
+  emergencyAt?: string | null
+  /** How many times the Call 000 button has been shown in this thread. */
+  emergencyCount?: number
 }
 
 export interface ConversationDetail {
@@ -250,6 +257,8 @@ export interface ConversationFilters {
   direction: MessageDirection | "all"
   handling: HandlingMode | "all"
   hasError: "all" | "with-error"
+  /** "only" = conversations where the Call 000 button was shown. */
+  emergency: "all" | "only"
   range: RangeId
   sort: SortId
 }
@@ -262,6 +271,7 @@ export const DEFAULT_FILTERS: ConversationFilters = {
   direction: "all",
   handling: "all",
   hasError: "all",
+  emergency: "all",
   range: "7d",
   sort: "recent",
 }

@@ -154,6 +154,7 @@ function matchesFilters(
   if (filters.handling !== "all" && summary.handlingMode !== filters.handling)
     return false
   if (filters.hasError === "with-error" && !summary.hasError) return false
+  if (filters.emergency === "only" && !summary.emergencyAt) return false
   if (
     filters.direction !== "all" &&
     summary.lastMessageDirection !== filters.direction

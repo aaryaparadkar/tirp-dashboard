@@ -537,7 +537,7 @@ const CONVERSATION_SEEDS: ConversationSeed[] = [
     id: "c-011",
     personaIndex: 9,
     intent: "emergency",
-    status: "resolved",
+    status: "needs_review",
     handlingMode: "escalated",
     language: "es",
     unreadCount: 0,
@@ -592,6 +592,9 @@ export const CONVERSATIONS: ConversationSummary[] = CONVERSATION_SEEDS.map(
       unreadCount: seed.unreadCount,
       hasError: seed.hasError,
       language: seed.language,
+      // Fixture: emergency threads were shown the Call 000 button.
+      emergencyAt: seed.intent === "emergency" ? seed.startedAt : null,
+      emergencyCount: seed.intent === "emergency" ? 1 : 0,
     }
   },
 )
@@ -1160,8 +1163,9 @@ export const TRIGGERS: TriggerDefinition[] = [
       {
         id: "phone",
         kind: "phone",
-        label: "Contact phone number",
-        description: "E.164 format such as +61412345620.",
+        label: "Contact",
+        description:
+          'Pick a contact, or choose "Enter a number" for someone new (E.164, e.g. +61412345620).',
         required: true,
       },
     ],
@@ -1180,8 +1184,9 @@ export const TRIGGERS: TriggerDefinition[] = [
       {
         id: "phone",
         kind: "phone",
-        label: "Contact phone number",
-        description: "E.164 format such as +61498331177.",
+        label: "Contact",
+        description:
+          'Pick a contact, or choose "Enter a number" for someone new (E.164, e.g. +61498331177).',
         required: true,
       },
     ],
@@ -1201,8 +1206,9 @@ export const TRIGGERS: TriggerDefinition[] = [
       {
         id: "phone",
         kind: "phone",
-        label: "Contact phone number",
-        description: "E.164 format such as +61455042891.",
+        label: "Contact",
+        description:
+          'Pick a contact, or choose "Enter a number" for someone new (E.164, e.g. +61455042891).',
         required: true,
       },
       {

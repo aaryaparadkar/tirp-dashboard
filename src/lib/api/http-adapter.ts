@@ -62,6 +62,7 @@ function conversationQuery(
   if (filters.direction !== "all") params.set("direction", filters.direction)
   if (filters.handling !== "all") params.set("handling", filters.handling)
   if (filters.hasError === "with-error") params.set("has_error", "with-error")
+  if (filters.emergency === "only") params.set("emergency", "only")
   const query = filters.search.trim()
   if (query) params.set("q", query)
   return params.toString()

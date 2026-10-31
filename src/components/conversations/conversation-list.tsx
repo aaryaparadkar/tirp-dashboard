@@ -1,7 +1,12 @@
 import { Link } from "@tanstack/react-router"
 import { CircleAlertIcon, InboxIcon } from "lucide-react"
 
-import { EmptyState, ErrorState, StatusBadge } from "@/components/app"
+import {
+  EmergencyBadge,
+  EmptyState,
+  ErrorState,
+  StatusBadge,
+} from "@/components/app"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -129,8 +134,9 @@ function ConversationRow({
       search={(previous) => ({ ...previous, c: conversation.id })}
       aria-current={active ? "true" : undefined}
       className={cn(
-        "hover:bg-accent/50 focus-visible:ring-ring relative flex flex-col gap-1.5 border-b px-4 py-3 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset",
-        active && "bg-accent",
+        "hover:bg-accent/50 focus-visible:ring-ring relative flex flex-col gap-1.5 border-b border-l-2 border-l-transparent px-4 py-3 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset",
+        active && "bg-accent border-l-primary",
+        conversation.emergencyAt && "border-l-destructive",
       )}
     >
       <span className="flex items-start justify-between gap-3">
@@ -165,6 +171,7 @@ function ConversationRow({
           {truncate(conversation.lastMessagePreview, 64)}
         </span>
         <span className="flex shrink-0 items-center gap-2">
+          <EmergencyBadge conversation={conversation} />
           {conversation.hasError ? (
             <>
               <CircleAlertIcon

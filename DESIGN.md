@@ -108,8 +108,20 @@ about 75 characters (`max-w-prose`), tabular figures for numeric columns.
 
 ### Radius
 
-A single `--radius` token drives the whole scale (`rounded-sm` … `rounded-4xl`).
-Do not hardcode pixel radii.
+A single `--radius` token drives the whole scale (`rounded-sm` … `rounded-4xl`)
+as multiples of it. The console ships **sharp**: `--radius: 0rem`, so cards,
+inputs, buttons, badges and alerts are square-cornered boxes. Only explicit
+`rounded-full` survives (avatars, status dots, switch thumbs). Do not hardcode
+pixel radii.
+
+### Emergency flag
+
+When the assistant shows a student the WhatsApp "Call 000" button the server
+sets `emergencyAt` on the conversation. The console surfaces it in four places,
+always as icon + text (never colour alone): a `000 · n` counter on the sidebar
+Conversations item, an "emergencies need follow-up" banner on Overview, a
+`000 shown` badge plus red left rule on list rows, and an `EmergencyAlert` in the
+conversation header. Filter with "Emergency (000 shown)".
 
 ### Motion
 
