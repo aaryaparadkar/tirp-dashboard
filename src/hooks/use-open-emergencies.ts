@@ -1,6 +1,7 @@
-import { useEffect, useMemo } from "react"
+import { useMemo } from "react"
 
 import { useDashboardQuery } from "@/hooks/use-dashboard-query"
+import { useLiveRefresh } from "@/hooks/use-live-refresh"
 import { getDashboardAdapter } from "@/lib/api/dashboard"
 import {
   DEFAULT_FILTERS,
@@ -8,11 +9,11 @@ import {
   type Page,
 } from "@/lib/api/types"
 
-const POLL_MS = 60_000
+const POLL_MS = 15_000
 
 /**
  * Unresolved conversations in the last 7 days where the assistant showed the
- * Call 000 button. Polls once a minute so the sidebar and overview stay
+ * Call 000 button. Polls every 15 s (while the tab is visible) so the sidebar and overview stay
  * current without a manual refresh.
  */
 export function useOpenEmergencies() {
@@ -24,12 +25,7 @@ export function useOpenEmergencies() {
       ),
     [],
   )
-  const { refetch } = query
-
-  useEffect(() => {
-    const timer = window.setInterval(refetch, POLL_MS)
-    return () => window.clearInterval(timer)
-  }, [refetch])
+  useLiveRefresh(query.refetch, POLL_MS)
 
   const open = useMemo(
     () =>

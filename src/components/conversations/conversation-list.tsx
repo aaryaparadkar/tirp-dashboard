@@ -37,6 +37,7 @@ export function ConversationList({
   generatedAt,
   onLoadMore,
   onRetry,
+  freshIds,
   className,
 }: {
   items: ConversationSummary[]
@@ -50,6 +51,8 @@ export function ConversationList({
   generatedAt: string
   onLoadMore: () => void
   onRetry: () => void
+  /** Rows that just arrived or changed; highlighted briefly. */
+  freshIds?: ReadonlySet<string>
   className?: string
 }) {
   if (error && items.length === 0) {
@@ -95,6 +98,7 @@ export function ConversationList({
             <ConversationRow
               conversation={item}
               active={item.id === selectedId}
+              fresh={freshIds?.has(item.id) ?? false}
               generatedAt={generatedAt}
             />
           </li>
@@ -122,10 +126,12 @@ export function ConversationList({
 function ConversationRow({
   conversation,
   active,
+  fresh,
   generatedAt,
 }: {
   conversation: ConversationSummary
   active: boolean
+  fresh: boolean
   generatedAt: string
 }) {
   return (
@@ -136,6 +142,7 @@ function ConversationRow({
       className={cn(
         "hover:bg-accent/50 focus-visible:ring-ring relative flex flex-col gap-1.5 border-b border-l-2 border-l-transparent px-4 py-3 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset",
         active && "bg-accent border-l-primary",
+        fresh && !active && "animate-rise-in bg-primary-soft border-l-primary",
         conversation.emergencyAt && "border-l-destructive",
       )}
     >

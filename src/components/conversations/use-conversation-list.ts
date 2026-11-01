@@ -25,6 +25,10 @@ export interface ConversationList {
   generatedAt: string
   loadMore: () => void
   refetch: () => void
+  /** Quiet background sync of the loaded rows (no loading state, no reset). */
+  sync: () => void
+  /** Ids that just arrived or changed in a sync; rows highlight briefly. */
+  freshIds: ReadonlySet<string>
   /** Local-only badge/state fixups so the list keeps up with the detail pane. */
   patchLocal: (
     conversationId: string,
@@ -40,6 +44,10 @@ export interface ConversationList {
 export function useConversationList(
   filters: ConversationFilters,
   pageSize: number = CONVERSATION_PAGE_SIZE,
+  opts: {
+    /** Called with conversations that appeared since the last sync. */
+    onNew?: (fresh: ConversationSummary[]) => void
+  } = {},
 ): ConversationList {
   const [items, setItems] = useState<ConversationSummary[]>([])
   const [total, setTotal] = useState(0)
@@ -48,6 +56,12 @@ export function useConversationList(
   const [loadingMore, setLoadingMore] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [freshIds, setFreshIds] = useState<ReadonlySet<string>>(new Set())
+  const itemsRef = useRef<ConversationSummary[]>([])
+  itemsRef.current = items
+  const onNewRef = useRef(opts.onNew)
+  onNewRef.current = opts.onNew
+  const syncing = useRef(false)
 
   const filterKey = useMemo(() => JSON.stringify(filters), [filters])
   const filtersRef = useRef(filters)
@@ -117,6 +131,55 @@ export function useConversationList(
     void run("replace").finally(() => setRefreshing(false))
   }, [run])
 
+  /**
+   * Live sync: re-read as many rows as are loaded (page 1, bigger page) and
+   * swap them in place. New conversations and changed ones (new message)
+   * are flagged for a short highlight; brand-new ones go to `onNew`.
+   */
+  const sync = useCallback(() => {
+    if (syncing.current || state !== "ready") return
+    syncing.current = true
+    const key = localKey.current
+    const size = Math.min(Math.max(itemsRef.current.length, pageSize), 50)
+    void getDashboardAdapter()
+      .listConversations(filtersRef.current, { page: 1, pageSize: size })
+      .then((result) => {
+        if (key !== pendingKey.current) return
+        const before = new Map(itemsRef.current.map((item) => [item.id, item]))
+        const arrived = result.data.filter((item) => !before.has(item.id))
+        const changed = result.data.filter((item) => {
+          const old = before.get(item.id)
+          return (
+            old !== undefined &&
+            (old.lastActivityAt !== item.lastActivityAt ||
+              old.messageCount !== item.messageCount ||
+              old.emergencyAt !== item.emergencyAt)
+          )
+        })
+        // Keep any extra rows the operator loaded beyond the sync window.
+        const synced = new Set(result.data.map((item) => item.id))
+        const tail = itemsRef.current
+          .slice(size)
+          .filter((item) => !synced.has(item.id))
+        setItems([...result.data, ...tail])
+        setTotal(result.total)
+        setGeneratedAt(result.generatedAt)
+        pageRef.current = Math.max(1, Math.ceil(size / pageSize))
+        const flagged = [...arrived, ...changed].map((item) => item.id)
+        if (flagged.length > 0) {
+          setFreshIds(new Set(flagged))
+          window.setTimeout(() => setFreshIds(new Set()), 4000)
+        }
+        if (arrived.length > 0 && before.size > 0) onNewRef.current?.(arrived)
+      })
+      .catch(() => {
+        /* transient: the next tick retries; the visible list stays */
+      })
+      .finally(() => {
+        syncing.current = false
+      })
+  }, [pageSize, state])
+
   const loadMore = useCallback(() => {
     if (loadingMore || !hasMore(items.length, total)) return
     setLoadingMore(true)
@@ -145,6 +208,8 @@ export function useConversationList(
     generatedAt,
     loadMore,
     refetch,
+    sync,
+    freshIds,
     patchLocal,
   }
 }

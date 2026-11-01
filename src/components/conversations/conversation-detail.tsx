@@ -20,6 +20,7 @@ import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useDashboardQuery } from "@/hooks/use-dashboard-query"
+import { useLiveRefresh } from "@/hooks/use-live-refresh"
 import { getDashboardAdapter } from "@/lib/api/dashboard"
 import { isMockAdapter } from "@/lib/api/client"
 import {
@@ -73,6 +74,8 @@ function DetailLoader({
     () => getDashboardAdapter().getConversation(conversationId),
     [conversationId],
   )
+  // Live: pick up new messages in the open chat every 4 s.
+  useLiveRefresh(query.refetch, 4000, query.data !== null)
 
   if (query.loading) {
     return (
@@ -88,7 +91,9 @@ function DetailLoader({
     )
   }
 
-  if (query.error) {
+  // A failed background refresh keeps the thread on screen; only a
+  // conversation that never loaded shows the error state.
+  if (query.error && !query.data) {
     return (
       <div className="flex flex-col gap-4">
         <ErrorState

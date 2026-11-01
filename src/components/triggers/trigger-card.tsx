@@ -1,10 +1,17 @@
 import { useState } from "react"
 import { toast } from "sonner"
-import { CircleAlertIcon, PlayIcon } from "lucide-react"
+import {
+  CheckIcon,
+  CircleAlertIcon,
+  PlayIcon,
+  SearchIcon,
+  XIcon,
+} from "lucide-react"
 
 import { StatusBadge, type StatusTone } from "@/components/app"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Card,
   CardContent,
@@ -23,6 +30,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Progress } from "@/components/ui/progress"
 import {
   Select,
   SelectContent,
@@ -139,12 +147,42 @@ function Fact({
   )
 }
 
-/** Select value prefix for a contact picked from a conversation. */
-const PICKED = "conv:"
-/** Select value that reveals the manual phone input. */
-const MANUAL = "__manual__"
+/** One recipient of a (possibly batched) run. */
+type RunTarget =
+  | { kind: "contact"; label: string; conversationId: string }
+  | { kind: "number"; label: string; phone: string }
 
-/** Run flow: explain → collect → validate → confirm → honest result. */
+/** Outcome of the run for one recipient. */
+type TargetOutcome = {
+  label: string
+  ok: boolean
+  detail: string
+}
+
+/** Split "+61…, +61… +61…" into distinct trimmed numbers. */
+function parseNumbers(raw: string): string[] {
+  return [
+    ...new Set(
+      raw
+        .split(/[\s,;]+/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  ]
+}
+
+function describeError(thrown: unknown): string {
+  if (thrown instanceof DashboardApiError) return thrown.message
+  if (thrown instanceof Error) return thrown.message
+  return "Unknown backend response."
+}
+
+/**
+ * Run flow: explain → collect → validate → confirm → honest result.
+ * Phone-targeted triggers accept many recipients; the run goes to each one
+ * in turn (sequentially, so server rate limits apply per message) and the
+ * dialog reports every recipient's outcome.
+ */
 export function TriggerRunDialog({
   trigger,
   openContacts,
@@ -161,98 +199,152 @@ export function TriggerRunDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const [values, setValues] = useState<Record<string, string>>({})
+  const [selected, setSelected] = useState<string[]>([])
+  const [manualNumbers, setManualNumbers] = useState("")
   const [validation, setValidation] = useState<string | null>(null)
-  const [error, setError] = useState<DashboardApiError | null>(null)
   const [pending, setPending] = useState(false)
-  const [result, setResult] = useState<TriggerExecution | null>(null)
+  const [progress, setProgress] = useState<{ done: number; total: number }>({
+    done: 0,
+    total: 0,
+  })
+  const [outcomes, setOutcomes] = useState<TargetOutcome[] | null>(null)
 
   if (!trigger || !open) return null
 
   const mock = isMockAdapter()
+  const phoneField = trigger.fields.find((field) => field.kind === "phone")
+
+  function reset() {
+    setValues({})
+    setSelected([])
+    setManualNumbers("")
+    setValidation(null)
+    setPending(false)
+    setProgress({ done: 0, total: 0 })
+    setOutcomes(null)
+  }
+
+  function collectTargets(problems: string[]): RunTarget[] {
+    if (!phoneField) {
+      return [
+        {
+          kind: "contact",
+          label:
+            openContacts.find((c) => c.id === values.conversation)?.contact
+              .displayName ?? "Conversation",
+          conversationId: values.conversation ?? "",
+        },
+      ]
+    }
+    const byId = new Map(contacts.map((c) => [c.id, c]))
+    const targets: RunTarget[] = selected.map((id) => {
+      const contact = byId.get(id)
+      return {
+        kind: "contact",
+        label: contact
+          ? `${contact.contact.displayName} · ${contact.contact.maskedPhone}`
+          : id,
+        conversationId: id,
+      }
+    })
+    const numbers = parseNumbers(manualNumbers)
+    const bad = numbers.filter((number) => !looksLikeE164(number))
+    if (bad.length > 0) {
+      problems.push(
+        `${bad.join(", ")} ${bad.length === 1 ? "doesn't" : "don't"} look like +61412345620.`,
+      )
+    }
+    for (const number of numbers) {
+      if (!bad.includes(number)) {
+        targets.push({ kind: "number", label: number, phone: number })
+      }
+    }
+    if (phoneField.required && targets.length === 0 && bad.length === 0) {
+      problems.push("Pick at least one contact or enter a number.")
+    }
+    return targets
+  }
 
   async function confirmRun() {
     if (!trigger) return
     const problems: string[] = []
-    let pickedConversation = ""
-    let manualPhone = ""
     for (const field of trigger.fields) {
-      const value = (values[field.id] ?? "").trim()
-      if (field.kind === "phone") {
-        if (value.startsWith(PICKED)) {
-          pickedConversation = value.slice(PICKED.length)
-          continue
-        }
-        manualPhone = value === MANUAL ? "" : value
-        if (field.required && manualPhone === "") {
-          problems.push(
-            `Pick a contact or enter a number for ${field.label.toLowerCase()}.`,
-          )
-        } else if (manualPhone !== "" && !looksLikeE164(manualPhone)) {
-          problems.push("The number must look like +61412345620.")
-        }
-        continue
-      }
-      if (field.required && value === "") {
+      if (field.kind === "phone") continue
+      if (field.required && (values[field.id] ?? "").trim() === "") {
         problems.push(`${field.label} is required.`)
       }
     }
+    const targets = collectTargets(problems)
     if (problems.length > 0) {
       setValidation(problems.join(" "))
       return
     }
     setValidation(null)
     setPending(true)
-    setError(null)
-    try {
-      const execution: TriggerExecution = await runTrigger(trigger.id, {
-        phone: manualPhone,
-        message: values.message ?? "",
-        // A picked contact is sent as its conversation; the server resolves
-        // the real number (the console only ever sees masked phones).
-        conversationId: pickedConversation || (values.conversation ?? ""),
-      })
-      setResult(execution)
-      toast.success(mock ? "Run recorded" : "Trigger completed", {
-        description: execution.result?.reference ?? "The trigger executed.",
-      })
-    } catch (thrown) {
-      setError(
-        thrown instanceof DashboardApiError
-          ? thrown
-          : new DashboardApiError({
-              code: "unavailable",
-              title: "The trigger could not run",
-              message:
-                thrown instanceof Error
-                  ? thrown.message
-                  : "Unknown backend response.",
-            }),
+    setProgress({ done: 0, total: targets.length })
+    const results: TargetOutcome[] = []
+    for (const target of targets) {
+      try {
+        const execution: TriggerExecution = await runTrigger(trigger.id, {
+          phone: target.kind === "number" ? target.phone : "",
+          message: values.message ?? "",
+          // A picked contact is sent as its conversation; the server resolves
+          // the real number (the console only ever sees masked phones).
+          conversationId:
+            target.kind === "contact" ? target.conversationId : "",
+        })
+        results.push({
+          label: target.label,
+          ok: true,
+          detail:
+            execution.result?.reference ??
+            execution.result?.detail ??
+            execution.id,
+        })
+      } catch (thrown) {
+        results.push({
+          label: target.label,
+          ok: false,
+          detail: describeError(thrown),
+        })
+      }
+      setProgress({ done: results.length, total: targets.length })
+      setOutcomes([...results])
+    }
+    setPending(false)
+    const okCount = results.filter((r) => r.ok).length
+    const failed = results.length - okCount
+    if (failed === 0) {
+      toast.success(
+        results.length === 1
+          ? "Trigger completed"
+          : `Sent to all ${results.length} contacts`,
+        { description: results.length === 1 ? results[0]?.detail : undefined },
       )
+    } else if (okCount === 0) {
       toast.error("Trigger not executed", {
         description:
-          thrown instanceof Error
-            ? thrown.message
-            : mock
-              ? "The run was refused — nothing was sent."
-              : "The run did not complete.",
+          results.length === 1
+            ? results[0]?.detail
+            : `All ${results.length} runs failed — nothing was sent.`,
       })
-    } finally {
-      setPending(false)
+    } else {
+      toast.warning(`${okCount} of ${results.length} sent`, {
+        description: `${failed} failed — see the results in the dialog.`,
+      })
     }
   }
 
   const formId = `trigger-run-${trigger.id}`
-  const finished = error !== null || result !== null
+  const finished = outcomes !== null && !pending
+  const recipientCount = selected.length + parseNumbers(manualNumbers).length
 
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next) {
-          setValues({})
-          setValidation(null)
-          setError(null)
-          setResult(null)
+        if (!next && !pending) {
+          reset()
           onOpenChange(false)
         }
       }}
@@ -263,7 +355,7 @@ export function TriggerRunDialog({
           <DialogDescription>
             {mock
               ? "The console is running on fixtures, so this run is refused before it can message anyone. Its inputs and validation are still exercised end to end."
-              : "This trigger messages a real WhatsApp contact. It explains exactly what it will do, collects its inputs first, and runs only after your confirmation."}
+              : "This trigger messages real WhatsApp contacts. Pick one or many; it runs for each, only after your confirmation."}
           </DialogDescription>
         </DialogHeader>
 
@@ -275,20 +367,33 @@ export function TriggerRunDialog({
             void confirmRun()
           }}
         >
-          {trigger.fields.map((field) => (
-            <RunField
-              key={field.id}
-              id={`trigger-field-${field.id}`}
-              field={field}
-              openContacts={openContacts}
-              contacts={contacts}
-              value={values[field.id] ?? ""}
-              onValueChange={(next) =>
-                setValues((previous) => ({ ...previous, [field.id]: next }))
-              }
-              disabled={pending || finished}
-            />
-          ))}
+          {trigger.fields.map((field) =>
+            field.kind === "phone" ? (
+              <ContactMultiPicker
+                key={field.id}
+                id={`trigger-field-${field.id}`}
+                field={field}
+                contacts={contacts}
+                selected={selected}
+                onSelectedChange={setSelected}
+                manualNumbers={manualNumbers}
+                onManualNumbersChange={setManualNumbers}
+                disabled={pending || finished}
+              />
+            ) : (
+              <RunField
+                key={field.id}
+                id={`trigger-field-${field.id}`}
+                field={field}
+                openContacts={openContacts}
+                value={values[field.id] ?? ""}
+                onValueChange={(next) =>
+                  setValues((previous) => ({ ...previous, [field.id]: next }))
+                }
+                disabled={pending || finished}
+              />
+            ),
+          )}
 
           {validation ? (
             <Alert variant="destructive">
@@ -298,29 +403,14 @@ export function TriggerRunDialog({
             </Alert>
           ) : null}
 
-          {error ? (
-            <Alert variant="destructive">
-              <AlertTitle>{error.title}</AlertTitle>
-              <AlertDescription>{error.message}</AlertDescription>
-            </Alert>
-          ) : null}
-
-          {result ? (
-            <Alert>
-              <AlertTitle>
-                {mock ? "Run recorded — nothing was sent" : "Run completed"}
-              </AlertTitle>
-              <AlertDescription>
-                {result.result?.detail ??
-                  (mock
-                    ? "The trigger completed only as a console record."
-                    : "The trigger ran and recorded its execution.")}{" "}
-                Reference:{" "}
-                <span className="font-mono">
-                  {result.result?.reference ?? result.id}
-                </span>
-              </AlertDescription>
-            </Alert>
+          {pending || outcomes ? (
+            <RunResults
+              outcomes={outcomes ?? []}
+              done={progress.done}
+              total={progress.total}
+              pending={pending}
+              mock={mock}
+            />
           ) : null}
 
           <p className="text-muted-foreground text-xs">
@@ -334,11 +424,9 @@ export function TriggerRunDialog({
         <DialogFooter>
           <Button
             variant="outline"
+            disabled={pending}
             onClick={() => {
-              setValues({})
-              setValidation(null)
-              setError(null)
-              setResult(null)
+              reset()
               onOpenChange(false)
             }}
           >
@@ -347,7 +435,11 @@ export function TriggerRunDialog({
           {!finished ? (
             <Button type="submit" form={formId} disabled={pending}>
               <PlayIcon aria-hidden="true" />
-              {pending ? "Running…" : "Confirm and run"}
+              {pending
+                ? `Running ${progress.done}/${progress.total}…`
+                : phoneField && recipientCount > 1
+                  ? `Confirm and run for ${recipientCount}`
+                  : "Confirm and run"}
             </Button>
           ) : null}
         </DialogFooter>
@@ -356,11 +448,81 @@ export function TriggerRunDialog({
   )
 }
 
+/** Progress while running, then one ✓/✗ line per recipient. */
+function RunResults({
+  outcomes,
+  done,
+  total,
+  pending,
+  mock,
+}: {
+  outcomes: TargetOutcome[]
+  done: number
+  total: number
+  pending: boolean
+  mock: boolean
+}) {
+  const okCount = outcomes.filter((o) => o.ok).length
+  const failed = outcomes.length - okCount
+  const title = pending
+    ? `Running… ${done} of ${total}`
+    : failed === 0
+      ? mock
+        ? "Run recorded — nothing was sent"
+        : total === 1
+          ? "Run completed"
+          : `Completed for all ${total}`
+      : okCount === 0
+        ? "Nothing was sent"
+        : `${okCount} of ${total} completed, ${failed} failed`
+  return (
+    <Alert variant={!pending && okCount === 0 ? "destructive" : "default"}>
+      <AlertTitle>{title}</AlertTitle>
+      <AlertDescription className="flex flex-col gap-2">
+        {total > 1 ? (
+          <Progress
+            value={total === 0 ? 0 : (done / total) * 100}
+            aria-label={`${done} of ${total} processed`}
+          />
+        ) : null}
+        <ul className="flex max-h-48 flex-col gap-1 overflow-y-auto">
+          {outcomes.map((outcome, index) => (
+            <li
+              key={`${outcome.label}-${index}`}
+              className="flex items-start gap-2 text-xs"
+            >
+              {outcome.ok ? (
+                <CheckIcon
+                  className="text-success mt-0.5 size-3.5 shrink-0"
+                  aria-hidden="true"
+                />
+              ) : (
+                <XIcon
+                  className="text-destructive mt-0.5 size-3.5 shrink-0"
+                  aria-hidden="true"
+                />
+              )}
+              <span className="sr-only">
+                {outcome.ok ? "Sent:" : "Failed:"}
+              </span>
+              <span className="min-w-0">
+                <span className="text-foreground font-medium">
+                  {outcome.label}
+                </span>{" "}
+                — <span className="break-words">{outcome.detail}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </AlertDescription>
+    </Alert>
+  )
+}
+
 function RunField({
   id,
   field,
   openContacts,
-  contacts,
   value,
   onValueChange,
   disabled,
@@ -368,7 +530,6 @@ function RunField({
   id: string
   field: TriggerDefinition["fields"][number]
   openContacts: ConversationSummary[]
-  contacts: ConversationSummary[]
   value: string
   onValueChange: (next: string) => void
   disabled?: boolean
@@ -381,17 +542,7 @@ function RunField({
         {field.label}
         {field.required ? <span className="text-destructive"> *</span> : null}
       </Label>
-      {field.kind === "phone" ? (
-        <ContactPicker
-          id={id}
-          describedBy={describedBy}
-          contacts={contacts}
-          value={value}
-          onValueChange={onValueChange}
-          disabled={disabled}
-          required={field.required}
-        />
-      ) : field.kind === "conversation" ? (
+      {field.kind === "conversation" ? (
         <Select
           value={value}
           onValueChange={onValueChange}
@@ -435,68 +586,160 @@ function RunField({
 }
 
 /**
- * Contact dropdown for phone-targeted triggers (same pattern as Escalate),
- * with a manual-entry option for someone who has not messaged yet.
+ * Multi-select contact list for phone-targeted triggers: search, tick any
+ * number of contacts (or all), and optionally add numbers that have not
+ * messaged yet.
  */
-function ContactPicker({
+function ContactMultiPicker({
   id,
-  describedBy,
+  field,
   contacts,
-  value,
-  onValueChange,
+  selected,
+  onSelectedChange,
+  manualNumbers,
+  onManualNumbersChange,
   disabled,
-  required,
 }: {
   id: string
-  describedBy: string
+  field: TriggerDefinition["fields"][number]
   contacts: ConversationSummary[]
-  value: string
-  onValueChange: (next: string) => void
+  selected: string[]
+  onSelectedChange: (next: string[]) => void
+  manualNumbers: string
+  onManualNumbersChange: (next: string) => void
   disabled?: boolean
-  required?: boolean
 }) {
-  const manual = value !== "" && !value.startsWith(PICKED)
-  const selectValue = manual ? MANUAL : value
+  const [query, setQuery] = useState("")
+  const describedBy = `${id}-hint`
+  const needle = query.trim().toLowerCase()
+  const visible = needle
+    ? contacts.filter((c) =>
+        `${c.contact.displayName} ${c.contact.maskedPhone}`
+          .toLowerCase()
+          .includes(needle),
+      )
+    : contacts
+  const selectedSet = new Set(selected)
+  const allVisibleSelected =
+    visible.length > 0 && visible.every((c) => selectedSet.has(c.id))
+
+  function toggle(contactId: string, checked: boolean) {
+    onSelectedChange(
+      checked
+        ? [...selected, contactId]
+        : selected.filter((item) => item !== contactId),
+    )
+  }
+
+  function toggleVisible() {
+    if (allVisibleSelected) {
+      const hide = new Set(visible.map((c) => c.id))
+      onSelectedChange(selected.filter((item) => !hide.has(item)))
+    } else {
+      onSelectedChange([...new Set([...selected, ...visible.map((c) => c.id)])])
+    }
+  }
+
   return (
-    <div className="flex flex-col gap-2">
-      <Select
-        value={selectValue}
-        onValueChange={(next) => onValueChange(next === MANUAL ? MANUAL : next)}
-        disabled={disabled}
-        required={required}
-      >
-        <SelectTrigger
-          id={id}
-          className="w-full"
-          aria-describedby={describedBy}
+    <fieldset className="flex flex-col gap-2" disabled={disabled}>
+      <div className="flex items-center justify-between gap-2">
+        <legend className="text-sm font-medium">
+          {field.label === "Contact" ? "Contacts" : field.label}
+          {field.required ? <span className="text-destructive"> *</span> : null}
+        </legend>
+        <span className="text-muted-foreground text-xs" aria-live="polite">
+          {selected.length} selected
+        </span>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <SearchIcon
+            className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2"
+            aria-hidden="true"
+          />
+          <Input
+            id={`${id}-search`}
+            aria-label="Search contacts"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search name or number"
+            className="pl-8"
+          />
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={toggleVisible}
+          disabled={disabled || visible.length === 0}
         >
-          <SelectValue placeholder="Choose a contact" />
-        </SelectTrigger>
-        <SelectContent>
-          {contacts.map((contact) => (
-            <SelectItem key={contact.id} value={`${PICKED}${contact.id}`}>
-              {contact.contact.displayName} · {contact.contact.maskedPhone}
-            </SelectItem>
-          ))}
-          <SelectItem value={MANUAL}>Enter a number…</SelectItem>
-        </SelectContent>
-      </Select>
-      {manual ? (
+          {allVisibleSelected
+            ? "Clear"
+            : needle
+              ? "Select shown"
+              : "Select all"}
+        </Button>
+      </div>
+      <ul
+        id={id}
+        aria-describedby={describedBy}
+        className="border-border flex max-h-56 flex-col overflow-y-auto border"
+      >
+        {visible.length === 0 ? (
+          <li className="text-muted-foreground px-3 py-2 text-xs">
+            {contacts.length === 0
+              ? "No contacts yet — enter numbers below."
+              : "No contacts match."}
+          </li>
+        ) : (
+          visible.map((contact) => {
+            const checkboxId = `${id}-c-${contact.id}`
+            return (
+              <li
+                key={contact.id}
+                className="hover:bg-muted/60 border-border flex items-center gap-2.5 border-b px-3 py-2 last:border-b-0"
+              >
+                <Checkbox
+                  id={checkboxId}
+                  checked={selectedSet.has(contact.id)}
+                  onCheckedChange={(checked) =>
+                    toggle(contact.id, checked === true)
+                  }
+                  disabled={disabled}
+                />
+                <Label
+                  htmlFor={checkboxId}
+                  className="flex min-w-0 flex-1 cursor-pointer justify-between gap-2 font-normal"
+                >
+                  <span className="truncate">
+                    {contact.contact.displayName}
+                  </span>
+                  <span className="text-muted-foreground font-mono text-xs">
+                    {contact.contact.maskedPhone}
+                  </span>
+                </Label>
+              </li>
+            )
+          })
+        )}
+      </ul>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor={`${id}-manual`} className="text-xs font-normal">
+          Other numbers (comma-separated)
+        </Label>
         <Input
           id={`${id}-manual`}
-          aria-label="Phone number (E.164)"
-          value={value === MANUAL ? "" : value}
-          onChange={(event) =>
-            onValueChange(
-              event.target.value === "" ? MANUAL : event.target.value,
-            )
-          }
+          value={manualNumbers}
+          onChange={(event) => onManualNumbersChange(event.target.value)}
           inputMode="tel"
-          autoFocus
           disabled={disabled}
-          placeholder={PLACEHOLDER.phone}
+          placeholder={`${PLACEHOLDER.phone}, +61412345621`}
         />
-      ) : null}
-    </div>
+      </div>
+      <p id={describedBy} className="text-muted-foreground text-xs">
+        {field.description ? `${field.description} ` : ""}
+        Runs once per recipient, one after another.
+      </p>
+    </fieldset>
   )
 }

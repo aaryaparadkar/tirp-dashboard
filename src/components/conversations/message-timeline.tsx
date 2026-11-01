@@ -22,10 +22,34 @@ export function MessageTimeline({
   retryPending?: boolean
   className?: string
 }) {
+  const listRef = useRef<HTMLOListElement>(null)
   const endRef = useRef<HTMLDivElement>(null)
+  const seenCount = useRef(0)
+  const stickToBottom = useRef(true)
+
+  // Remember whether the operator is reading at the bottom; live updates
+  // only auto-scroll in that case, so they never yank someone mid-read.
+  useEffect(() => {
+    const list = listRef.current
+    if (!list) return
+    const onScroll = () => {
+      stickToBottom.current =
+        list.scrollHeight - list.scrollTop - list.clientHeight < 120
+    }
+    list.addEventListener("scroll", onScroll, { passive: true })
+    return () => list.removeEventListener("scroll", onScroll)
+  }, [messages.length > 0])
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "end" })
+    const list = listRef.current
+    const first = seenCount.current === 0
+    seenCount.current = messages.length
+    if (!list) return
+    if (first || stickToBottom.current) {
+      list.scrollTop = list.scrollHeight
+      // Page-level scroll only on first open (mobile, no inner scroll).
+      if (first) endRef.current?.scrollIntoView({ block: "end" })
+    }
   }, [messages.length])
 
   if (messages.length === 0) {
@@ -39,6 +63,7 @@ export function MessageTimeline({
 
   return (
     <ol
+      ref={listRef}
       aria-label="Message timeline"
       className={cn("flex flex-col gap-3 overflow-y-auto", className)}
     >

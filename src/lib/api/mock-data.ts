@@ -1165,7 +1165,7 @@ export const TRIGGERS: TriggerDefinition[] = [
         kind: "phone",
         label: "Contact",
         description:
-          'Pick a contact, or choose "Enter a number" for someone new (E.164, e.g. +61412345620).',
+          "Tick one or more contacts, or add numbers for people who have not messaged yet (E.164, e.g. +61412345620).",
         required: true,
       },
     ],
@@ -1186,7 +1186,7 @@ export const TRIGGERS: TriggerDefinition[] = [
         kind: "phone",
         label: "Contact",
         description:
-          'Pick a contact, or choose "Enter a number" for someone new (E.164, e.g. +61498331177).',
+          "Tick one or more contacts, or add numbers for people who have not messaged yet (E.164, e.g. +61498331177).",
         required: true,
       },
     ],
@@ -1208,7 +1208,7 @@ export const TRIGGERS: TriggerDefinition[] = [
         kind: "phone",
         label: "Contact",
         description:
-          'Pick a contact, or choose "Enter a number" for someone new (E.164, e.g. +61455042891).',
+          "Tick one or more contacts, or add numbers for people who have not messaged yet (E.164, e.g. +61455042891).",
         required: true,
       },
       {

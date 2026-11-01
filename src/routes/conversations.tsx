@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router"
 import { useMemo, useState } from "react"
 import { InboxIcon } from "lucide-react"
+import { toast } from "sonner"
 import { ConversationFilters } from "@/components/conversations/conversation-filters"
 import { ConversationList } from "@/components/conversations/conversation-list"
 import { ConversationDetail } from "@/components/conversations/conversation-detail"
@@ -12,6 +13,7 @@ import {
   PageSection,
 } from "@/components/app"
 import { useDebouncedValue } from "@/hooks/use-debounced-value"
+import { useLiveRefresh } from "@/hooks/use-live-refresh"
 import {
   DEFAULT_FILTERS,
   type ConversationFilters as Filters,
@@ -38,7 +40,26 @@ function ConversationsPage() {
     [filters, debouncedSearch],
   )
 
-  const list = useConversationList(effectiveFilters)
+  const navigate = Route.useNavigate()
+  const list = useConversationList(effectiveFilters, undefined, {
+    onNew: (fresh) => {
+      const first = fresh[0]
+      toast.info(
+        fresh.length === 1
+          ? `New enquiry from ${first.contact.displayName}`
+          : `${fresh.length} new enquiries`,
+        {
+          description: first.lastMessagePreview,
+          action: {
+            label: "Open",
+            onClick: () => void navigate({ search: { c: first.id } }),
+          },
+        },
+      )
+    },
+  })
+  // Live: quietly re-sync the list every 5 s while the tab is visible.
+  useLiveRefresh(list.sync, 5000)
   // Snapshot time from the latest list response (fixtures or tirp-server).
   const generatedAt = list.generatedAt
 
@@ -47,6 +68,7 @@ function ConversationsPage() {
       <PageHeader
         title="Conversations"
         description="Follow every chat, read the thread with delivery metadata, and draft replies. Selection lives in the URL so a chat can be shared or bookmarked."
+        actions={<LiveIndicator />}
       />
 
       <DemoDataNote generatedAt={generatedAt} />
@@ -78,6 +100,7 @@ function ConversationsPage() {
             generatedAt={generatedAt}
             onLoadMore={list.loadMore}
             onRetry={list.refetch}
+            freshIds={list.freshIds}
           />
         </PageSection>
 
@@ -106,5 +129,18 @@ function ConversationsPage() {
         </PageSection>
       </div>
     </div>
+  )
+}
+
+/** Small "Live" badge: the list and open chat update on their own. */
+function LiveIndicator() {
+  return (
+    <span className="text-muted-foreground inline-flex items-center gap-2 border px-2.5 py-1 text-xs">
+      <span aria-hidden="true" className="relative flex size-2">
+        <span className="bg-success absolute inline-flex size-full rounded-full opacity-60 motion-safe:animate-ping" />
+        <span className="bg-success relative inline-flex size-2 rounded-full" />
+      </span>
+      Live · updates automatically
+    </span>
   )
 }
